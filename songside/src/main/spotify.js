@@ -49,7 +49,11 @@ export async function loginSpotify(mainWindow) {
       modal: true,
       webPreferences: {
         nodeIntegration: false,
-        contextIsolation: true
+        contextIsolation: true,
+        // Dedicated in-memory session (no `persist:` prefix) for the OAuth
+        // window, isolated from the app's default session so Google/Spotify
+        // never resume a stale passkey/recovery state from a prior attempt.
+        partition: 'spotify-oauth'
       }
     })
 
@@ -61,8 +65,16 @@ export async function loginSpotify(mainWindow) {
     authUrl.searchParams.append('scope', SCOPES)
     authUrl.searchParams.append('code_challenge_method', 'S256')
     authUrl.searchParams.append('code_challenge', codeChallenge)
+    // Force the Spotify account chooser rather than silently resuming a session.
+    authUrl.searchParams.append('show_dialog', 'true')
 
-    authWindow.loadURL(authUrl.toString())
+    // Wipe the OAuth window's cookies/cache before navigating so Google serves a
+    // clean email + password login instead of resuming a broken passkey /
+    // account-recovery flow. Best-effort — load anyway if clearing fails.
+    const authSession = authWindow.webContents.session
+    Promise.allSettled([authSession.clearStorageData(), authSession.clearCache()]).then(() => {
+      if (authWindow) authWindow.loadURL(authUrl.toString())
+    })
 
     // Spotify's final hop to the callback can arrive either as an HTTP redirect
     // (will-redirect) or as a fresh top-level navigation (will-navigate),
