@@ -5,18 +5,73 @@
   --album-color: hsl(141 73% 42%);
 }
 
-/* The floating pill tints from --album-color. color-mix keeps it translucent
-   over the blurred backdrop; transitions let the tint cross-fade smoothly when
-   the album color changes on a new track. */
-.album-pill {
-  background: color-mix(in srgb, var(--album-color) 30%, rgba(15, 15, 18, 0.55));
-  border-color: color-mix(in srgb, var(--album-color) 55%, transparent);
-  box-shadow: 0 8px 30px color-mix(in srgb, var(--album-color) 35%, transparent);
-  backdrop-filter: blur(12px);
-  transition:
-    background-color 600ms ease,
-    border-color 600ms ease,
-    box-shadow 600ms ease;
+/* The renderer fills the whole frameless window. The frosted material itself is
+   native macOS vibrancy (set on the BrowserWindow), so the page background stays
+   transparent and only lets light through. */
+html,
+body,
+#root {
+  background: transparent;
+}
+
+/* Apple-native type. The overlay lives on macOS, so SF is the honest choice —
+   tuned tracking gives the lines that crisp display feel. */
+body {
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', Inter, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* No box. Two stacked radial gradients that both fade to fully transparent at
+   the edges, so there's no panel boundary — the content just floats on the
+   desktop:
+     1. an album-tinted ambient glow (cross-fades on song change), and
+     2. a soft dark scrim pooled behind the text purely for legibility over
+        bright/busy wallpapers — feathered, never a hard rectangle.
+   This layer is non-interactive so it never intercepts the lyric clicks. */
+.float-bg {
+  background:
+    radial-gradient(
+      135% 105% at 72% 36%,
+      color-mix(in srgb, var(--album-color) 40%, transparent) 0%,
+      color-mix(in srgb, var(--album-color) 12%, transparent) 30%,
+      transparent 62%
+    ),
+    radial-gradient(
+      125% 95% at 58% 48%,
+      rgba(0, 0, 0, 0.62) 0%,
+      rgba(0, 0, 0, 0.34) 40%,
+      transparent 74%
+    );
+  transition: background 700ms ease;
+}
+
+/* Text legibility without a box: a tight shadow carried by every glyph so lyrics
+   stay readable even where the scrim has faded out. Inherited by all text. */
+.float-content {
+  text-shadow:
+    0 1px 4px rgba(0, 0, 0, 0.72),
+    0 0 2px rgba(0, 0, 0, 0.55);
+}
+
+/* Clickable lyric line: pointer + a brightness lift on hover so it reads as
+   seekable. brightness() lifts the faded upcoming lines too. */
+.lyric-line {
+  cursor: pointer;
+  transition: filter 120ms ease;
+}
+
+.lyric-line:hover {
+  filter: brightness(1.5);
+}
+
+/* Signature element: a slim playhead pinned to the active lyric line — a
+   karaoke cursor in the album color. It encodes where you are in the song, so
+   it earns its place rather than decorating. */
+.playhead {
+  background: var(--album-color);
+  box-shadow: 0 0 10px 0 color-mix(in srgb, var(--album-color) 70%, transparent);
+  transition: background 700ms ease;
 }
 
 @keyframes overlay-in {
@@ -34,11 +89,11 @@
   animation: overlay-in 340ms cubic-bezier(0.2, 0.7, 0.2, 1);
 }
 
-/* Each new active lyric line fades up as it becomes current. */
+/* Each new active line lifts and brightens as it becomes current. */
 @keyframes line-in {
   from {
     opacity: 0;
-    transform: translateY(4px);
+    transform: translateY(5px);
   }
   to {
     opacity: 1;
@@ -47,5 +102,5 @@
 }
 
 .animate-line-in {
-  animation: line-in 260ms ease-out;
+  animation: line-in 300ms cubic-bezier(0.2, 0.7, 0.2, 1);
 }

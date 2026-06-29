@@ -17,6 +17,26 @@ const USER_AGENT = 'songside (https://github.com/songside/songside)'
 
 const SPOTIFY_POLL_MS = 3000
 const TICK_MS = 500
+// How many upcoming lines to send below the active one (the renderer fades them
+// out progressively). Plus the single previous line above.
+const UPCOMING = 5
+
+// Build the synced-lyrics IPC frame for a given active index. idx === -1 means
+// we're before the first line (intro) — active is null and we preview the
+// opening lines as the upcoming stack. Each line carries its { text, time } so
+// the renderer can seek playback to a line on click.
+function buildSyncedFrame(lines, idx, meta) {
+  const start = Math.max(idx + 1, 0)
+  const lineOf = (l) => ({ text: l.text, time: l.time })
+  return {
+    mode: 'synced',
+    trackId: meta.trackId,
+    songName: meta.songName,
+    prev: idx > 0 ? lineOf(lines[idx - 1]) : null,
+    active: idx >= 0 ? lineOf(lines[idx]) : null,
+    next: lines.slice(start, start + UPCOMING).map(lineOf)
+  }
+}
 
 // ---- LRC parsing -----------------------------------------------------------
 
@@ -114,6 +134,17 @@ export function stopLyricsSync() {
   }
 }
 
+// Called right after a user-initiated seek: move the interpolation anchor to the
+// new position and re-run the tick so the active line jumps to the clicked line
+// immediately, rather than lagging until the next 3s Spotify poll.
+export function applySeek(positionMs) {
+  if (!engine) return
+  engine.anchorMs = Math.max(0, positionMs)
+  engine.anchorAt = Date.now()
+  engine.activeIdx = -1 // force tick() to recompute and push a fresh frame
+  engine.tick()
+}
+
 class SyncEngine {
   constructor(mainWindow) {
     this.win = mainWindow
@@ -198,14 +229,7 @@ class SyncEngine {
       // Emit an initial frame so the overlay enters synced mode immediately
       // (during the intro, before the first line, active is null). tick() takes
       // over from here as the position advances past each timestamp.
-      this.send({
-        mode: 'synced',
-        trackId: forId,
-        songName: this.songName,
-        prev: null,
-        active: null,
-        next: lyrics.synced[0]?.text ?? null
-      })
+      this.send(buildSyncedFrame(lyrics.synced, -1, this))
     } else if (lyrics.mode === 'plain') {
       this.send({ mode: 'plain', trackId: forId, songName: this.songName, plain: lyrics.plain })
     } else {
@@ -242,14 +266,7 @@ class SyncEngine {
     if (idx === this.activeIdx) return // still on the same line — nothing to push
     this.activeIdx = idx
 
-    this.send({
-      mode: 'synced',
-      trackId: this.trackId,
-      songName: this.songName,
-      prev: idx > 0 ? lines[idx - 1].text : null,
-      active: idx >= 0 ? lines[idx].text : null,
-      next: idx + 1 < lines.length ? lines[idx + 1].text : null
-    })
+    this.send(buildSyncedFrame(lines, idx, this))
   }
 
   send(payload) {

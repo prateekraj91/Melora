@@ -24,7 +24,10 @@ export default [
     },
     rules: {
       ...eslintPluginReactHooks.configs.recommended.rules,
-      ...eslintPluginReactRefresh.configs.vite.rules
+      ...eslintPluginReactRefresh.configs.vite.rules,
+      // This codebase uses modern React without PropTypes (no prop-types dep);
+      // components are validated by usage, not runtime prop declarations.
+      'react/prop-types': 'off'
     }
   },
   eslintConfigPrettier

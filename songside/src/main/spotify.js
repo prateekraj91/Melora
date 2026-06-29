@@ -4,7 +4,9 @@ import { getSpotifyTokens, saveSpotifyTokens } from './store.js'
 
 const REDIRECT_URI = 'http://127.0.0.1:8888/callback'
 const CLIENT_ID = process.env.SPOTIFY_CLIENT_ID
-const SCOPES = 'user-read-playback-state user-read-currently-playing'
+// user-modify-playback-state is required for the click-to-seek feature
+// (PUT /me/player/seek); the read scopes cover currently-playing + position.
+const SCOPES = 'user-read-playback-state user-read-currently-playing user-modify-playback-state'
 
 function generateRandomString(length) {
   return crypto.randomBytes(60).toString('hex').substring(0, length)
@@ -194,4 +196,23 @@ export async function getCurrentlyPlaying() {
   }
 
   return response.json()
+}
+
+// Seek the active playback to position_ms. Returns true on success. A 404 means
+// there's no active device to seek; we treat that (and other failures) as a
+// soft no-op rather than throwing, since this is a best-effort UI action.
+export async function seekTo(positionMs) {
+  const token = await getValidAccessToken()
+  if (!token) return false
+
+  const ms = Math.max(0, Math.round(positionMs))
+  const response = await fetch(`https://api.spotify.com/v1/me/player/seek?position_ms=${ms}`, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${token}` }
+  })
+
+  // Spotify returns 204 (No Content) on success, occasionally 202 (Accepted).
+  if (response.ok || response.status === 202) return true
+  console.warn(`[spotify] seek failed: ${response.status}`)
+  return false
 }
