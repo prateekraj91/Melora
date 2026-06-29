@@ -3,9 +3,9 @@ import { useTrack } from '../hooks/useTrack'
 import { useColor } from '../hooks/useColor'
 import { useLyrics } from '../hooks/useLyrics'
 
-// Opacity ramp for the upcoming lines below the active one — each step further
-// out fades toward the desktop.
-const UPCOMING_OPACITY = [0.6, 0.42, 0.29, 0.2, 0.14]
+// Opacity ramp for the upcoming lines below the active one — kept very low so
+// the context lines are barely-there, ghosted, well behind the active line.
+const UPCOMING_OPACITY = [0.32, 0.23, 0.16, 0.11, 0.08]
 
 // Seek playback to a line's timestamp. Guarded so a missing time (intro frame)
 // is a no-op.
@@ -19,12 +19,13 @@ function seekTo(time) {
 function AlbumArt({ art, size = 'sm' }) {
   const [broken, setBroken] = useState(false)
   const box = size === 'lg' ? 'h-16 w-16 rounded-xl' : 'h-7 w-7 rounded-md'
-  const shadow = 'drop-shadow-[0_2px_6px_rgba(0,0,0,0.55)]'
+  // Held back to match the quiet, translucent text: dimmed and softly shadowed.
+  const tone = 'opacity-75 drop-shadow-[0_2px_5px_rgba(0,0,0,0.4)]'
 
   if (!art || broken) {
     return (
       <div
-        className={`${box} ${shadow} flex-shrink-0`}
+        className={`${box} ${tone} flex-shrink-0`}
         style={{ background: 'color-mix(in srgb, var(--album-color) 55%, rgba(0,0,0,0.45))' }}
       />
     )
@@ -34,7 +35,7 @@ function AlbumArt({ art, size = 'sm' }) {
       src={art}
       alt=""
       onError={() => setBroken(true)}
-      className={`${box} ${shadow} flex-shrink-0 object-cover`}
+      className={`${box} ${tone} flex-shrink-0 object-cover`}
     />
   )
 }
@@ -45,10 +46,10 @@ function Header({ track }) {
     <div className="flex items-center gap-2.5">
       <AlbumArt art={track.art} />
       <div className="flex min-w-0 flex-col">
-        <span className="truncate text-[12px] font-semibold leading-tight text-white/[0.9]">
+        <span className="truncate text-[12px] font-medium leading-tight text-white/[0.55]">
           {track.name}
         </span>
-        <span className="truncate text-[11px] leading-tight text-white/[0.45]">{track.artist}</span>
+        <span className="truncate text-[11px] leading-tight text-white/[0.28]">{track.artist}</span>
       </div>
     </div>
   )
@@ -63,7 +64,7 @@ function LyricStack({ lyrics, next }) {
       {lyrics.prev && (
         <span
           onClick={() => seekTo(lyrics.prev.time)}
-          className="lyric-line truncate pl-[13px] text-[13px] leading-snug text-white/[0.3]"
+          className="lyric-line truncate pl-[13px] text-[13px] leading-snug text-white/[0.16]"
         >
           {lyrics.prev.text}
         </span>
@@ -74,7 +75,7 @@ function LyricStack({ lyrics, next }) {
         <span
           key={lyrics.active?.text}
           onClick={() => lyrics.active && seekTo(lyrics.active.time)}
-          className="lyric-line animate-line-in truncate text-[16px] font-semibold leading-snug tracking-[-0.01em] text-white/[0.96]"
+          className="lyric-line animate-line-in truncate text-[15px] font-normal leading-snug tracking-[-0.01em] text-white/[0.68]"
         >
           {lyrics.active?.text || '♪'}
         </span>
@@ -101,15 +102,15 @@ function NowPlaying({ track, mode }) {
     <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
       <AlbumArt art={track.art} size="lg" />
       <div className="flex max-w-full flex-col gap-0.5">
-        <span className="truncate text-[16px] font-semibold tracking-[-0.01em] text-white/[0.96]">
+        <span className="truncate text-[15px] font-normal tracking-[-0.01em] text-white/[0.68]">
           {track.name}
         </span>
-        <span className="truncate text-[13px] text-white/[0.5]">{track.artist}</span>
+        <span className="truncate text-[13px] text-white/[0.32]">{track.artist}</span>
         {mode === 'plain' && (
-          <span className="mt-1 text-[11px] text-white/[0.35]">♪ lyrics available, not synced</span>
+          <span className="mt-1 text-[11px] text-white/[0.24]">♪ lyrics available, not synced</span>
         )}
         {mode === 'none' && (
-          <span className="mt-1 text-[11px] text-white/[0.3]">no lyrics found</span>
+          <span className="mt-1 text-[11px] text-white/[0.22]">no lyrics found</span>
         )}
       </div>
     </div>

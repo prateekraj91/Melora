@@ -33,25 +33,26 @@ body {
   background:
     radial-gradient(
       135% 105% at 72% 36%,
-      color-mix(in srgb, var(--album-color) 40%, transparent) 0%,
-      color-mix(in srgb, var(--album-color) 12%, transparent) 30%,
+      color-mix(in srgb, var(--album-color) 26%, transparent) 0%,
+      color-mix(in srgb, var(--album-color) 8%, transparent) 30%,
       transparent 62%
     ),
     radial-gradient(
       125% 95% at 58% 48%,
-      rgba(0, 0, 0, 0.62) 0%,
-      rgba(0, 0, 0, 0.34) 40%,
+      rgba(0, 0, 0, 0.36) 0%,
+      rgba(0, 0, 0, 0.18) 40%,
       transparent 74%
     );
   transition: background 700ms ease;
 }
 
-/* Text legibility without a box: a tight shadow carried by every glyph so lyrics
-   stay readable even where the scrim has faded out. Inherited by all text. */
+/* Text legibility without a box: a soft shadow carried by every glyph so the
+   quiet, translucent lyrics still hold their edge over busy wallpaper — kept
+   light so it reads as ambient, not as a dark plate. Inherited by all text. */
 .float-content {
   text-shadow:
-    0 1px 4px rgba(0, 0, 0, 0.72),
-    0 0 2px rgba(0, 0, 0, 0.55);
+    0 1px 3px rgba(0, 0, 0, 0.45),
+    0 0 2px rgba(0, 0, 0, 0.35);
 }
 
 /* Clickable lyric line: pointer + a brightness lift on hover so it reads as
@@ -69,8 +70,8 @@ body {
    karaoke cursor in the album color. It encodes where you are in the song, so
    it earns its place rather than decorating. */
 .playhead {
-  background: var(--album-color);
-  box-shadow: 0 0 10px 0 color-mix(in srgb, var(--album-color) 70%, transparent);
+  background: color-mix(in srgb, var(--album-color) 72%, transparent);
+  box-shadow: 0 0 8px 0 color-mix(in srgb, var(--album-color) 40%, transparent);
   transition: background 700ms ease;
 }
 
