@@ -121,6 +121,23 @@ export async function fetchLyrics({ artist, track, album, durationSec }) {
 
 let engine = null
 
+// Playback-state subscription. The engine already polls Spotify, so it's the
+// single source of truth for whether music is 'playing' | 'paused' | 'none'
+// (nothing playing / not connected). The main process uses this to auto-hide the
+// overlay only while an active track is paused.
+let playbackListener = null
+let lastPlaybackState = null
+
+export function onPlaybackState(cb) {
+  playbackListener = cb
+}
+
+function emitPlayback(state) {
+  if (state === lastPlaybackState) return
+  lastPlaybackState = state
+  playbackListener?.(state)
+}
+
 export function startLyricsSync(mainWindow) {
   if (engine) return
   engine = new SyncEngine(mainWindow)
@@ -186,6 +203,9 @@ class SyncEngine {
 
     const item = playing?.item
     if (!item) {
+      // Nothing playing or not connected — keep the overlay visible (so the
+      // Connect button stays reachable); never treat this as a pause.
+      emitPlayback('none')
       if (this.trackId !== null) {
         this.trackId = null
         this.songName = ''
@@ -199,6 +219,7 @@ class SyncEngine {
     this.anchorMs = playing.progress_ms ?? 0
     this.anchorAt = Date.now()
     this.isPlaying = playing.is_playing ?? true
+    emitPlayback(this.isPlaying ? 'playing' : 'paused')
 
     if (item.id !== this.trackId) {
       this.trackId = item.id
