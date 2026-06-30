@@ -3,7 +3,7 @@ import { app, shell, BrowserWindow, ipcMain, screen, globalShortcut } from 'elec
 import { loginSpotify, getCurrentlyPlaying, seekTo, isConnected } from './spotify.js'
 import { getAlbumColor } from './color.js'
 import { getLyricMeaning, getMood, getWeeklyDigest, warmOllama } from './llm.js'
-import { startLyricsSync, applySeek, onPlaybackState } from './lyrics.js'
+import { startLyricsSync, applySeek } from './lyrics.js'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
@@ -70,35 +70,22 @@ function createWindow() {
 
 // Overlay hide/show behavior.
 //
-// The overlay is meant to sit quietly while music plays, so visibility follows
-// playback — never cursor movement. An ambient lyrics overlay shouldn't vanish
-// just because you're reading or typing without touching the mouse. Two controls:
-//   • ⌥⌘L      — hard manual toggle. Tap to hide (e.g. before reaching into
-//                Control Center), tap again to show. macOS exposes no reliable
-//                "Control Center opened" signal, so this is the deliberate hide.
-//   • playback — auto-hide ONLY when an active track is paused; reappear when
-//                music resumes. We never hide on 'nothing playing / not yet
-//                connected', so the "Connect Spotify" button is always reachable.
+// The overlay stays visible whenever the app is running and instead reflects
+// playback in its content: lyrics while music plays, a calm "Play something on
+// Spotify" prompt when paused or idle (handled in the renderer). We deliberately
+// do NOT auto-hide on pause — a paused state shows the quiet prompt rather than
+// vanishing, so the overlay never blinks in and out as you pause/resume. The
+// only hide is the hard manual toggle:
+//   • ⌥⌘L — tap to hide (e.g. before reaching into Control Center), tap to show.
+//           macOS exposes no reliable "Control Center opened" signal, so this is
+//           the deliberate hide.
 function setupOverlayBehavior(win) {
   let userHidden = false // hard toggle (⌥⌘L)
-  let paused = false // an active track is paused — the only auto-hide trigger
-
-  const apply = () => {
-    const shouldShow = !userHidden && !paused
-    if (shouldShow && !win.isVisible()) win.showInactive()
-    else if (!shouldShow && win.isVisible()) win.hide()
-  }
-
-  // Fed by the lyrics sync engine's Spotify polling: 'playing' | 'paused' |
-  // 'none'. Only a confirmed 'paused' hides the overlay.
-  onPlaybackState((state) => {
-    paused = state === 'paused'
-    apply()
-  })
 
   globalShortcut.register('Alt+Command+L', () => {
     userHidden = !userHidden
-    apply()
+    if (userHidden && win.isVisible()) win.hide()
+    else if (!userHidden && !win.isVisible()) win.showInactive()
   })
 }
 

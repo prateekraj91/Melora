@@ -1,5 +1,10 @@
 import { useRef, useState, useCallback, useEffect } from 'react'
 
+// Cap the renderer-side meaning cache so an always-on session can't grow it
+// without bound. Evicts the oldest entry (Map keeps insertion order) past the
+// cap; the main process keeps its own matching cap.
+const CACHE_MAX = 50
+
 // Deliberate-hover delay before we fetch + show a line's meaning. This is the
 // primary mechanism that keeps the meaning tooltip from fighting click-to-seek:
 // a click is a fast in-and-out, so a normal click never dwells long enough to
@@ -64,6 +69,9 @@ export function useLyricMeaning(track) {
         try {
           const meaning = await window.api.getLyricMeaning(song, track.artist, lyric)
           cacheRef.current.set(key, meaning)
+          if (cacheRef.current.size > CACHE_MAX) {
+            cacheRef.current.delete(cacheRef.current.keys().next().value)
+          }
           // Only paint if the user is still dwelling on this same line.
           if (activeKeyRef.current === key) {
             setTip({ text: lyric, meaning, loading: false, rect })

@@ -144,9 +144,26 @@ function MeaningTip({ tip }) {
   )
 }
 
-// Fallback view when there are no synced lyrics: centered now-playing. Used for
-// unsynced ('plain') and no-match ('none') tracks.
-function NowPlaying({ track, mode }) {
+// Second rung of the fallback chain: a track with unsynced ('plain') lyrics —
+// common for a lot of Indian/regional music LRCLIB only has as plain text. We
+// can't run the karaoke playhead, so we present the words themselves: the same
+// header, then the full lyric scrolled in a soft-masked column. Reads as a
+// deliberate "here are the lyrics" view, not a degraded one.
+function PlainLyrics({ track, text }) {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
+      <Header track={track} />
+      <div className="plain-scroll min-h-0 flex-1 overflow-y-auto pl-[13px] pr-1">
+        <p className="whitespace-pre-line text-[12.5px] leading-[1.65] text-white/[0.34]">{text}</p>
+      </div>
+    </div>
+  )
+}
+
+// Last rung: no lyrics matched at all. Just the album art, song, and artist —
+// floating and complete on its own, with a faint marker so it reads as a
+// finished state rather than something still loading.
+function NowPlaying({ track }) {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
       <AlbumArt art={track.art} size="lg" />
@@ -155,25 +172,32 @@ function NowPlaying({ track, mode }) {
           {track.name}
         </span>
         <span className="truncate text-[13px] text-white/[0.32]">{track.artist}</span>
-        {mode === 'plain' && (
-          <span className="mt-1 text-[11px] text-white/[0.24]">♪ lyrics available, not synced</span>
-        )}
-        {mode === 'none' && (
-          <span className="mt-1 text-[11px] text-white/[0.22]">no lyrics found</span>
-        )}
+        <span className="mt-1 text-[10px] tracking-wide text-white/[0.2]">lyrics unavailable</span>
       </div>
     </div>
   )
 }
 
-// Connected, but nothing is playing yet — a quiet prompt instead of the Connect
-// button, so a connected session never looks disconnected.
-function WaitingForPlayback() {
+// Calm resting state for paused or idle playback. Shown instead of stale lyrics
+// the moment music isn't actively playing. If a (paused) track is loaded we keep
+// its dimmed art so the overlay stays warm rather than going blank; pure idle
+// gets a soft glyph. Either way the message is a gentle nudge, not an error.
+function IdlePrompt({ track }) {
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-center">
-      <span className="text-[13px] text-white/[0.45]">♪</span>
-      <span className="text-[12px] text-white/[0.4]">Waiting for playback…</span>
-      <span className="text-[10px] text-white/[0.22]">Play a song in Spotify</span>
+    <div className="flex h-full w-full flex-col items-center justify-center gap-3 text-center">
+      {track?.art ? (
+        <div className="opacity-50">
+          <AlbumArt art={track.art} size="lg" />
+        </div>
+      ) : (
+        <span className="text-[15px] text-white/[0.3]">♪</span>
+      )}
+      <div className="flex max-w-full flex-col gap-0.5">
+        <span className="text-[13px] text-white/[0.5]">Play something on Spotify</span>
+        {track && (
+          <span className="truncate text-[11px] text-white/[0.26]">{track.name} · paused</span>
+        )}
+      </div>
     </div>
   )
 }
@@ -186,8 +210,48 @@ function Overlay() {
   const lyrics = useLyrics(track?.id)
   const next = Array.isArray(lyrics?.next) ? lyrics.next : []
   const synced = lyrics?.mode === 'synced' && (lyrics.active || lyrics.prev || next.length)
+  // A loaded track that isn't actively playing → paused. Shown as the calm
+  // resting state rather than a frozen, stale lyric stack.
+  const paused = track && track.isPlaying === false
   // Deliberate-hover AI meaning tooltip for lyric lines (local Ollama).
   const meaning = useLyricMeaning(track)
+
+  // Pick the view down the fallback chain: not-connected → idle/paused →
+  // synced karaoke → plain lyrics → bare now-playing. Every branch renders a
+  // complete, intentional state — never blank or broken.
+  let content
+  if (!track) {
+    content = error ? (
+      <div className="flex h-full w-full items-center justify-center">
+        <span className="px-3 text-center text-[11px] text-red-300">{error}</span>
+      </div>
+    ) : connected ? (
+      <IdlePrompt />
+    ) : (
+      <div className="flex h-full w-full items-center justify-center">
+        <button
+          onClick={connect}
+          className="rounded-full bg-green-500 px-4 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-green-600"
+        >
+          Connect Spotify
+        </button>
+      </div>
+    )
+  } else if (paused) {
+    content = <IdlePrompt track={track} />
+  } else if (synced) {
+    // key remounts the stack on track change so the enter animation replays.
+    content = (
+      <div key={track.id} className="flex min-h-0 flex-1 flex-col gap-3">
+        <Header track={track} />
+        <LyricStack lyrics={lyrics} next={next} meaning={meaning} />
+      </div>
+    )
+  } else if (lyrics?.mode === 'plain' && lyrics.plain) {
+    content = <PlainLyrics key={track.id} track={track} text={lyrics.plain} />
+  } else {
+    content = <NowPlaying key={track.id} track={track} />
+  }
 
   return (
     <div className="float-content relative h-screen w-screen text-white">
@@ -196,30 +260,7 @@ function Overlay() {
       <div className="float-bg pointer-events-none absolute inset-0" />
 
       <div className="animate-overlay-in relative z-10 flex h-full w-full flex-col gap-3 px-4 py-3.5">
-        {!track ? (
-          <div className="flex h-full w-full items-center justify-center">
-            {error ? (
-              <span className="px-3 text-center text-[11px] text-red-300">{error}</span>
-            ) : connected ? (
-              <WaitingForPlayback />
-            ) : (
-              <button
-                onClick={connect}
-                className="rounded-full bg-green-500 px-4 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-green-600"
-              >
-                Connect Spotify
-              </button>
-            )}
-          </div>
-        ) : synced ? (
-          // key remounts the stack on track change so the enter animation replays.
-          <div key={track.id} className="flex min-h-0 flex-1 flex-col gap-3">
-            <Header track={track} />
-            <LyricStack lyrics={lyrics} next={next} meaning={meaning} />
-          </div>
-        ) : (
-          <NowPlaying key={track.id} track={track} mode={lyrics?.mode} />
-        )}
+        {content}
       </div>
 
       {/* Floating, click-through meaning tooltip. Lives above the content layer

@@ -118,13 +118,23 @@ function digestPrompt(log) {
 
 // ---- public API ------------------------------------------------------------
 
+// Bounded lyric-meaning cache. This is an always-on overlay, so an unbounded
+// Map would creep upward for every line of every song across a long session.
+// Cap it and evict the oldest entry (Map preserves insertion order) once full —
+// 50 lines is far more than one screen's worth of context.
+const CACHE_MAX = 50
 const cache = new Map()
+
+function cachePut(key, value) {
+  cache.set(key, value)
+  if (cache.size > CACHE_MAX) cache.delete(cache.keys().next().value)
+}
 
 export async function getLyricMeaning(song, artist, lyric) {
   const key = `${song}::${lyric}`
   if (cache.has(key)) return cache.get(key)
   const meaning = await complete(lyricMeaningPrompt(song, artist, lyric), { maxTokens: 80 })
-  cache.set(key, meaning)
+  cachePut(key, meaning)
   return meaning
 }
 
