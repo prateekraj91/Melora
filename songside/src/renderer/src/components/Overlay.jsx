@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useTrack } from '../hooks/useTrack'
 import { useColor } from '../hooks/useColor'
 import { useLyrics } from '../hooks/useLyrics'
+import { useLyricMeaning } from '../hooks/useLyricMeaning'
 
 // Opacity ramp for the upcoming lines below the active one — kept very low so
 // the context lines are barely-there, ghosted, well behind the active line.
@@ -55,15 +56,31 @@ function Header({ track }) {
   )
 }
 
+// Wires a lyric line's hover-meaning + click-to-seek without the two fighting.
+// The 600ms dwell (in useLyricMeaning) keeps a quick click from triggering the
+// tooltip; onClick here dismisses any tooltip *before* seeking; and the tooltip
+// itself is pointer-events:none, so even when shown it never swallows the click.
+function lyricHandlers(text, time, meaning) {
+  return {
+    onMouseEnter: (e) => meaning.enter(text, e.currentTarget),
+    onMouseLeave: meaning.leave,
+    onClick: () => {
+      meaning.dismiss()
+      seekTo(time)
+    }
+  }
+}
+
 // The karaoke stack: 1 previous line (faded), the active line (bright, marked by
 // the playhead), then up to 5 upcoming lines fading progressively away. Every
-// line is clickable to seek playback to its timestamp.
-function LyricStack({ lyrics, next }) {
+// line is clickable to seek playback to its timestamp, and a deliberate ~600ms
+// hover surfaces an AI meaning tooltip for that line.
+function LyricStack({ lyrics, next, meaning }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col justify-center gap-[5px]">
       {lyrics.prev && (
         <span
-          onClick={() => seekTo(lyrics.prev.time)}
+          {...lyricHandlers(lyrics.prev.text, lyrics.prev.time, meaning)}
           className="lyric-line truncate pl-[13px] text-[13px] leading-snug text-white/[0.16]"
         >
           {lyrics.prev.text}
@@ -74,7 +91,7 @@ function LyricStack({ lyrics, next }) {
         <span className="playhead h-[1.05em] w-[3px] flex-shrink-0 rounded-full" />
         <span
           key={lyrics.active?.text}
-          onClick={() => lyrics.active && seekTo(lyrics.active.time)}
+          {...(lyrics.active ? lyricHandlers(lyrics.active.text, lyrics.active.time, meaning) : {})}
           className="lyric-line animate-line-in truncate text-[15px] font-normal leading-snug tracking-[-0.01em] text-white/[0.68]"
         >
           {lyrics.active?.text || '♪'}
@@ -84,13 +101,45 @@ function LyricStack({ lyrics, next }) {
       {next.map((line, i) => (
         <span
           key={`${i}-${line.text}`}
-          onClick={() => seekTo(line.time)}
+          {...lyricHandlers(line.text, line.time, meaning)}
           className="lyric-line truncate pl-[13px] text-[13px] leading-snug"
           style={{ color: `rgba(255,255,255,${UPCOMING_OPACITY[i] ?? 0.12})` }}
         >
           {line.text}
         </span>
       ))}
+    </div>
+  )
+}
+
+// Floating meaning tooltip for a dwelt-on lyric line. Anchored just above or
+// just below the line (whichever side the line leaves room for) so it never
+// covers the line you're reading, and pointer-events:none so a click always
+// falls through to the lyric beneath it — the tooltip can't intercept the seek.
+function MeaningTip({ tip }) {
+  if (!tip) return null
+  const GAP = 8
+  // Place below when the line sits in the top half of the window, above when it
+  // sits in the bottom half — keeps the tip inside the small frameless window.
+  const below = tip.rect.top < window.innerHeight / 2
+  const pos = { left: 16, right: 16 }
+  if (below) pos.top = tip.rect.bottom + GAP
+  else pos.bottom = window.innerHeight - tip.rect.top + GAP
+
+  return (
+    <div style={{ position: 'fixed', ...pos }} className="meaning-tip pointer-events-none z-20">
+      <div className="meaning-tip-body rounded-xl px-3 py-2 text-[11px] leading-[1.5] text-white/[0.74]">
+        {tip.loading ? (
+          <span className="meaning-tip-loading text-white/[0.5]">reading the line…</span>
+        ) : (
+          <span>
+            <span className="meaning-tip-spark" style={{ color: 'var(--album-color)' }}>
+              ✦{' '}
+            </span>
+            {tip.meaning}
+          </span>
+        )}
+      </div>
     </div>
   )
 }
@@ -117,14 +166,28 @@ function NowPlaying({ track, mode }) {
   )
 }
 
+// Connected, but nothing is playing yet — a quiet prompt instead of the Connect
+// button, so a connected session never looks disconnected.
+function WaitingForPlayback() {
+  return (
+    <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-center">
+      <span className="text-[13px] text-white/[0.45]">♪</span>
+      <span className="text-[12px] text-white/[0.4]">Waiting for playback…</span>
+      <span className="text-[10px] text-white/[0.22]">Play a song in Spotify</span>
+    </div>
+  )
+}
+
 function Overlay() {
-  const { track, error, connect } = useTrack()
+  const { track, connected, error, connect } = useTrack()
   // Drives the --album-color CSS variable; the ambient glow and playhead read it.
   useColor(track?.art)
   // Synced/plain lyric frames pushed from the main process for this track.
   const lyrics = useLyrics(track?.id)
   const next = Array.isArray(lyrics?.next) ? lyrics.next : []
   const synced = lyrics?.mode === 'synced' && (lyrics.active || lyrics.prev || next.length)
+  // Deliberate-hover AI meaning tooltip for lyric lines (local Ollama).
+  const meaning = useLyricMeaning(track)
 
   return (
     <div className="float-content relative h-screen w-screen text-white">
@@ -137,6 +200,8 @@ function Overlay() {
           <div className="flex h-full w-full items-center justify-center">
             {error ? (
               <span className="px-3 text-center text-[11px] text-red-300">{error}</span>
+            ) : connected ? (
+              <WaitingForPlayback />
             ) : (
               <button
                 onClick={connect}
@@ -150,12 +215,16 @@ function Overlay() {
           // key remounts the stack on track change so the enter animation replays.
           <div key={track.id} className="flex min-h-0 flex-1 flex-col gap-3">
             <Header track={track} />
-            <LyricStack lyrics={lyrics} next={next} />
+            <LyricStack lyrics={lyrics} next={next} meaning={meaning} />
           </div>
         ) : (
           <NowPlaying key={track.id} track={track} mode={lyrics?.mode} />
         )}
       </div>
+
+      {/* Floating, click-through meaning tooltip. Lives above the content layer
+          and outside the lyric flow so it can be anchored anywhere in the window. */}
+      <MeaningTip tip={meaning.tip} />
     </div>
   )
 }
