@@ -1,6 +1,6 @@
 import 'dotenv/config'
 import { app, shell, BrowserWindow, ipcMain, screen, globalShortcut } from 'electron'
-import { loginSpotify, getCurrentlyPlaying, seekTo } from './spotify.js'
+import { loginSpotify, getCurrentlyPlaying, seekTo, isConnected } from './spotify.js'
 import { getAlbumColor } from './color.js'
 import { getLyricMeaning, getMood, getWeeklyDigest, warmOllama } from './llm.js'
 import { startLyricsSync, applySeek, onPlaybackState } from './lyrics.js'
@@ -139,6 +139,10 @@ app.whenReady().then(() => {
 
   ipcMain.handle('spotify:currently-playing', async () => {
     return await getCurrentlyPlaying()
+  })
+
+  ipcMain.handle('spotify:is-connected', () => {
+    return isConnected()
   })
 
   // Click-to-seek: jump Spotify playback to a lyric line's timestamp, then

@@ -181,6 +181,13 @@ export async function getValidAccessToken() {
   return tokens.accessToken
 }
 
+// Whether we have a stored access token. Lets the overlay tell "connected but
+// nothing playing" apart from "not connected" — both produce a null currently-
+// playing, but only the latter should show the Connect button.
+export function isConnected() {
+  return !!getSpotifyTokens().accessToken
+}
+
 export async function getCurrentlyPlaying() {
   const token = await getValidAccessToken()
   if (!token) return null

@@ -5,6 +5,7 @@ import { electronAPI } from '@electron-toolkit/preload'
 const api = {
   spotifyLogin: () => ipcRenderer.invoke('spotify:login'),
   getCurrentlyPlaying: () => ipcRenderer.invoke('spotify:currently-playing'),
+  isConnected: () => ipcRenderer.invoke('spotify:is-connected'),
   seek: (positionMs) => ipcRenderer.invoke('spotify:seek', positionMs),
   getAlbumColor: (imageUrl) => ipcRenderer.invoke('color:album', imageUrl),
   getLyricMeaning: (song, artist, lyric) =>

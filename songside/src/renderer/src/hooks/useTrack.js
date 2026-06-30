@@ -21,11 +21,19 @@ function normalize(playing) {
 export function useTrack() {
   const [track, setTrack] = useState(null)
   const [error, setError] = useState(null)
+  // Whether a Spotify token exists. Distinct from `track` so the overlay can
+  // tell "connected but nothing playing" (idle) from "not connected" (Connect
+  // button) — both leave `track` null.
+  const [connected, setConnected] = useState(false)
 
   const refetch = useCallback(async () => {
     try {
-      const playing = await window.api.getCurrentlyPlaying()
+      const [playing, isConnected] = await Promise.all([
+        window.api.getCurrentlyPlaying(),
+        window.api.isConnected()
+      ])
       setTrack(normalize(playing))
+      setConnected(isConnected)
       setError(null)
     } catch (err) {
       setError(err.message)
@@ -42,10 +50,13 @@ export function useTrack() {
   }, [refetch])
 
   useEffect(() => {
+    // Kick off an immediate fetch, then poll. The synchronous setState inside
+    // refetch is intentional here (initial load), not a cascading-render bug.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     refetch()
     const interval = setInterval(refetch, POLL_MS)
     return () => clearInterval(interval)
   }, [refetch])
 
-  return { track, error, connect }
+  return { track, connected, error, connect }
 }
