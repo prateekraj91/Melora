@@ -77,7 +77,12 @@ export function useLyricMeaning(track) {
             setTip({ text: lyric, meaning, loading: false, rect })
           }
         } catch {
-          if (activeKeyRef.current === key) hide()
+          // Both LLM providers failed (e.g. Ollama down and Gemini quota spent).
+          // Show a brief note rather than silently vanishing, so the feature
+          // never just looks dead. Not cached, so a later hover retries.
+          if (activeKeyRef.current === key) {
+            setTip({ text: lyric, meaning: 'couldn’t read this line right now', loading: false, rect })
+          }
         }
       }, HOVER_DELAY_MS)
     },

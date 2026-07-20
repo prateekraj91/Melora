@@ -1,4 +1,6 @@
 import 'dotenv/config'
+import { spawn } from 'node:child_process'
+import { existsSync } from 'node:fs'
 
 // Which provider to try first. The other one is used automatically as a
 // fallback if the primary fails (no key, network error, Ollama not running,
@@ -145,6 +147,50 @@ export async function getMood(song, artist) {
 
 export async function getWeeklyDigest(log) {
   return complete(digestPrompt(log), { maxTokens: 250 })
+}
+
+// Is the local Ollama daemon answering? Short timeout — we only want a quick
+// liveness check, not to block launch.
+async function ollamaReachable() {
+  try {
+    const res = await fetch(`${OLLAMA_URL}/api/tags`, { signal: AbortSignal.timeout(1500) })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
+// Where the `ollama` binary usually lives. A packaged macOS app launched from
+// the login item doesn't inherit a shell PATH, so we can't rely on a bare
+// `ollama` resolving — probe the common Homebrew/install locations first and
+// fall back to PATH only if none exist.
+function findOllamaBin() {
+  for (const p of ['/opt/homebrew/bin/ollama', '/usr/local/bin/ollama']) {
+    if (existsSync(p)) return p
+  }
+  return 'ollama'
+}
+
+// Ensure the lyric-meaning model is actually serveable. Ollama is installed on
+// most setups but its daemon often isn't running at login; without it the only
+// fallback is Gemini, which can be quota-exhausted — so the tooltip silently
+// dies. Here we start `ollama serve` ourselves (detached, so it behaves like the
+// background service it is) and then warm the model. Best-effort: if Ollama
+// isn't installed this no-ops and requests fall back to Gemini.
+export async function ensureOllama() {
+  if (await ollamaReachable()) {
+    warmOllama()
+    return
+  }
+  try {
+    const child = spawn(findOllamaBin(), ['serve'], { detached: true, stdio: 'ignore' })
+    child.on('error', (e) => console.warn('[llm] could not start ollama:', e.message))
+    child.unref()
+  } catch (e) {
+    console.warn('[llm] could not start ollama:', e.message)
+  }
+  // Give the daemon a moment to bind its port, then warm the model.
+  setTimeout(() => warmOllama(), 1500)
 }
 
 // Optional: warm Ollama on app launch so the first hover isn't a cold load.

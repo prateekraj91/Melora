@@ -9,7 +9,7 @@
 // interpolate locally on every 500ms tick. That keeps the visible line moving
 // smoothly without hammering the Spotify API at 2 req/s.
 
-import { getCurrentlyPlaying } from './spotify.js'
+import { getCurrentlyPlaying, isConnected } from './spotify.js'
 
 const LRCLIB_BASE = 'https://lrclib.net/api'
 // LRCLIB asks clients to identify themselves with a User-Agent.
@@ -17,6 +17,9 @@ const USER_AGENT = 'songside (https://github.com/songside/songside)'
 
 const SPOTIFY_POLL_MS = 3000
 const TICK_MS = 500
+// Abort an LRCLIB request that stalls, so a hung connection can't wedge the
+// fetch flag and leave the overlay stuck on "finding lyrics…" forever.
+const LRCLIB_TIMEOUT_MS = 8000
 // How many upcoming lines to send below the active one (the renderer fades them
 // out progressively). Plus the single previous line above.
 const UPCOMING = 5
@@ -72,39 +75,54 @@ export function parseLRC(lrc) {
 
 // ---- LRCLIB fetch ----------------------------------------------------------
 
+// One LRCLIB request. A 404 is a genuine "no match" → null. Anything else (5xx
+// like the gateway 504s LRCLIB throws under load, a network blip, or a timeout)
+// throws, so the caller can RETRY rather than caching a false "no lyrics" that
+// sticks until the track changes.
 async function lrclibGet(path) {
-  try {
-    const res = await fetch(`${LRCLIB_BASE}${path}`, {
-      headers: { 'User-Agent': USER_AGENT }
-    })
-    if (res.status === 404) return null
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    return await res.json()
-  } catch (e) {
-    console.warn('[lyrics] LRCLIB request failed:', e.message)
-    return null
-  }
+  const res = await fetch(`${LRCLIB_BASE}${path}`, {
+    headers: { 'User-Agent': USER_AGENT },
+    signal: AbortSignal.timeout(LRCLIB_TIMEOUT_MS)
+  })
+  if (res.status === 404) return null
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return await res.json()
 }
 
 // Resolve lyrics for a track. Tries the exact signature match first (which is
 // fastest and most accurate), then falls back to a fuzzy search. Returns:
 //   { mode: 'synced', synced: [...], plain }  — timed lyrics available
 //   { mode: 'plain',  synced: [],   plain }   — only unsynced text available
-//   { mode: 'none',   synced: [],   plain: null } — no match at all
+//   { mode: 'none',   synced: [],   plain: null } — confirmed no match
+// THROWS if LRCLIB is unreachable / erroring (so the caller retries instead of
+// treating a transient outage as "no lyrics"). 'none' means LRCLIB answered and
+// genuinely had nothing.
 export async function fetchLyrics({ artist, track, album, durationSec }) {
   const params = new URLSearchParams({ artist_name: artist, track_name: track })
   if (album) params.set('album_name', album)
   if (durationSec) params.set('duration', String(durationSec))
+  const searchParams = new URLSearchParams({ track_name: track, artist_name: artist })
 
-  let data = await lrclibGet(`/get?${params}`)
+  // Fire the exact signature match and the fuzzy search together. A signature
+  // miss is common (the album/duration LRCLIB has don't line up, especially for
+  // regional tracks), and running these in parallel means that miss no longer
+  // costs a second sequential round-trip — the single biggest source of the
+  // "finding lyrics…" wait. We still prefer the exact /get match when it lands
+  // and only consult the search as the fallback.
+  const [getRes, searchRes] = await Promise.allSettled([
+    lrclibGet(`/get?${params}`),
+    lrclibGet(`/search?${searchParams}`)
+  ])
+
+  let data = getRes.status === 'fulfilled' ? getRes.value : null
 
   if (!data) {
-    // Signature match failed — usually an album/duration mismatch. Fall back to
-    // a fuzzy search and prefer the first candidate that actually has synced
-    // lyrics, otherwise take the top result.
-    const results = await lrclibGet(
-      `/search?${new URLSearchParams({ track_name: track, artist_name: artist })}`
-    )
+    // No exact match. If the fallback search itself errored (a transient LRCLIB
+    // outage rather than a clean "no results"), throw so the caller retries
+    // instead of caching a false "no lyrics" that sticks until the track changes.
+    if (searchRes.status === 'rejected') throw searchRes.reason
+    const results = searchRes.value
+    // Prefer the first candidate that actually has synced lyrics, else the top.
     data = Array.isArray(results) ? results.find((r) => r.syncedLyrics) || results[0] : null
   }
 
@@ -122,9 +140,12 @@ export async function fetchLyrics({ artist, track, album, durationSec }) {
 let engine = null
 
 // Playback-state subscription. The engine already polls Spotify, so it's the
-// single source of truth for whether music is 'playing' | 'paused' | 'none'
-// (nothing playing / not connected). The main process uses this to auto-hide the
-// overlay only while an active track is paused.
+// single source of truth for playback. States:
+//   'playing'      — a track is actively playing → overlay should be visible
+//   'paused'       — a track is loaded but paused → overlay should hide
+//   'none'         — connected, but nothing playing / Spotify quit → overlay hides
+//   'disconnected' — no Spotify token yet → keep overlay up so Connect stays reachable
+// The main process subscribes to drive the overlay's automatic show/hide.
 let playbackListener = null
 let lastPlaybackState = null
 
@@ -177,6 +198,10 @@ class SyncEngine {
 
     this.activeIdx = -1
     this.fetching = false
+    // Whether lyrics for the current track resolved (a real answer, including a
+    // confirmed "none"). Stays false after a transient LRCLIB failure so poll()
+    // keeps retrying instead of leaving the track wrongly marked unavailable.
+    this.lyricsLoaded = false
     this.spotifyTimer = null
     this.tickTimer = null
   }
@@ -203,9 +228,9 @@ class SyncEngine {
 
     const item = playing?.item
     if (!item) {
-      // Nothing playing or not connected — keep the overlay visible (so the
-      // Connect button stays reachable); never treat this as a pause.
-      emitPlayback('none')
+      // Nothing playing. Distinguish "connected but idle / Spotify quit" (hide
+      // the overlay) from "never connected" (keep it up for the Connect button).
+      emitPlayback(isConnected() ? 'none' : 'disconnected')
       if (this.trackId !== null) {
         this.trackId = null
         this.songName = ''
@@ -225,6 +250,14 @@ class SyncEngine {
       this.trackId = item.id
       this.songName = item.name
       this.activeIdx = -1
+      this.lyricsLoaded = false
+      // Drop the previous song's lines immediately so tick() can't push them
+      // (tagged with the new trackId) during the fetch/retry window.
+      this.lyrics = { mode: 'none', synced: [], plain: null }
+      await this.loadLyrics(item)
+    } else if (!this.lyricsLoaded && !this.fetching) {
+      // Same track, but its lyrics never resolved (a prior LRCLIB outage) —
+      // retry on this poll. ~3s cadence until LRCLIB answers.
       await this.loadLyrics(item)
     }
   }
@@ -234,17 +267,30 @@ class SyncEngine {
     this.fetching = true
     const forId = item.id
 
-    const lyrics = await fetchLyrics({
-      artist: item.artists?.map((a) => a.name).join(', ') ?? '',
-      track: item.name,
-      album: item.album?.name,
-      durationSec: item.duration_ms ? Math.round(item.duration_ms / 1000) : undefined
-    })
+    let lyrics
+    try {
+      lyrics = await fetchLyrics({
+        artist: item.artists?.map((a) => a.name).join(', ') ?? '',
+        track: item.name,
+        album: item.album?.name,
+        durationSec: item.duration_ms ? Math.round(item.duration_ms / 1000) : undefined
+      })
+    } catch (e) {
+      // LRCLIB unreachable/erroring. Leave lyricsLoaded false so poll() retries;
+      // the overlay keeps showing "finding lyrics…" rather than "unavailable".
+      console.warn(`[lyrics] fetch failed for "${item.name}" — will retry:`, e.message)
+      this.fetching = false
+      return
+    }
+    console.log(
+      `[lyrics] "${item.name}" id=${forId} → ${lyrics.mode} (${lyrics.synced.length} synced lines)`
+    )
 
     this.fetching = false
     // The track may have changed while we were fetching — drop stale results.
     if (forId !== this.trackId) return
     this.lyrics = lyrics
+    this.lyricsLoaded = true
 
     if (lyrics.mode === 'synced') {
       // Emit an initial frame so the overlay enters synced mode immediately

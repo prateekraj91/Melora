@@ -7,6 +7,10 @@ const api = {
   getCurrentlyPlaying: () => ipcRenderer.invoke('spotify:currently-playing'),
   isConnected: () => ipcRenderer.invoke('spotify:is-connected'),
   seek: (positionMs) => ipcRenderer.invoke('spotify:seek', positionMs),
+  // Toggle whether the overlay window captures clicks (true) or lets them fall
+  // through to the app behind it (false). Driven by the renderer's hover
+  // hit-testing — see useClickThrough.
+  setInteractive: (interactive) => ipcRenderer.send('overlay:set-interactive', interactive),
   getAlbumColor: (imageUrl) => ipcRenderer.invoke('color:album', imageUrl),
   getLyricMeaning: (song, artist, lyric) =>
     ipcRenderer.invoke('llm:lyric-meaning', song, artist, lyric),

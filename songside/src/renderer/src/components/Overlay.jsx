@@ -3,6 +3,7 @@ import { useTrack } from '../hooks/useTrack'
 import { useColor } from '../hooks/useColor'
 import { useLyrics } from '../hooks/useLyrics'
 import { useLyricMeaning } from '../hooks/useLyricMeaning'
+import { useClickThrough } from '../hooks/useClickThrough'
 
 // Opacity ramp for the upcoming lines below the active one — kept very low so
 // the context lines are barely-there, ghosted, well behind the active line.
@@ -62,6 +63,9 @@ function Header({ track }) {
 // itself is pointer-events:none, so even when shown it never swallows the click.
 function lyricHandlers(text, time, meaning) {
   return {
+    // Marks the line as a click-capturing region so the window stops passing
+    // clicks through while the cursor is on it (see useClickThrough).
+    'data-interactive': true,
     onMouseEnter: (e) => meaning.enter(text, e.currentTarget),
     onMouseLeave: meaning.leave,
     onClick: () => {
@@ -153,7 +157,10 @@ function PlainLyrics({ track, text }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       <Header track={track} />
-      <div className="plain-scroll min-h-0 flex-1 overflow-y-auto pl-[13px] pr-1">
+      <div
+        data-interactive
+        className="plain-scroll min-h-0 flex-1 overflow-y-auto pl-[13px] pr-1"
+      >
         <p className="whitespace-pre-line text-[12.5px] leading-[1.65] text-white/[0.34]">{text}</p>
       </div>
     </div>
@@ -173,6 +180,28 @@ function NowPlaying({ track }) {
         </span>
         <span className="truncate text-[13px] text-white/[0.32]">{track.artist}</span>
         <span className="mt-1 text-[10px] tracking-wide text-white/[0.2]">lyrics unavailable</span>
+      </div>
+    </div>
+  )
+}
+
+// Transient state while lyrics for the current track are still being fetched
+// from LRCLIB (the few seconds between the track appearing and the lyric frame
+// arriving). Kept visually identical to NowPlaying but with a gently pulsing
+// "finding lyrics…" so a song that *does* have lyrics never flashes the
+// "unavailable" message during the load.
+function LoadingLyrics({ track }) {
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
+      <AlbumArt art={track.art} size="lg" />
+      <div className="flex max-w-full flex-col gap-0.5">
+        <span className="truncate text-[15px] font-normal tracking-[-0.01em] text-white/[0.68]">
+          {track.name}
+        </span>
+        <span className="truncate text-[13px] text-white/[0.32]">{track.artist}</span>
+        <span className="meaning-tip-loading mt-1 text-[10px] tracking-wide text-white/[0.28]">
+          finding lyrics…
+        </span>
       </div>
     </div>
   )
@@ -203,6 +232,9 @@ function IdlePrompt({ track }) {
 }
 
 function Overlay() {
+  // Let clicks fall through to the apps behind the overlay except over the
+  // actual lyric lines / buttons.
+  useClickThrough()
   const { track, connected, error, connect } = useTrack()
   // Drives the --album-color CSS variable; the ambient glow and playhead read it.
   useColor(track?.art)
@@ -230,6 +262,7 @@ function Overlay() {
     ) : (
       <div className="flex h-full w-full items-center justify-center">
         <button
+          data-interactive
           onClick={connect}
           className="rounded-full bg-green-500 px-4 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-green-600"
         >
@@ -249,8 +282,13 @@ function Overlay() {
     )
   } else if (lyrics?.mode === 'plain' && lyrics.plain) {
     content = <PlainLyrics key={track.id} track={track} text={lyrics.plain} />
-  } else {
+  } else if (lyrics?.mode === 'none') {
+    // The main process confirmed LRCLIB has no match for this track.
     content = <NowPlaying key={track.id} track={track} />
+  } else {
+    // No lyric frame for the current track yet → still fetching. Show a loading
+    // state rather than prematurely claiming the lyrics are unavailable.
+    content = <LoadingLyrics key={track.id} track={track} />
   }
 
   return (
