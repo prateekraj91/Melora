@@ -1,19 +1,38 @@
 # 🎵 Songside
 
-An AI-powered desktop companion for Spotify.
+An AI-powered desktop companion for Spotify that displays synchronized lyrics in a floating overlay and explains song meanings in real time while you listen.
 
-Songside displays synchronized lyrics in a floating overlay and uses AI to explain the meaning of the song you're listening to in real time.
+---
+
+## 📸 Screenshots
+
+### Songside running on Spotify
+
+<img width="1470" alt="Songside Hero" src="YOUR_FIRST_IMAGE_LINK">
+
+### Floating overlay while coding
+
+<img width="1470" alt="Songside VS Code" src="YOUR_SECOND_IMAGE_LINK">
+
+### AI lyric explanation
+
+<img width="373" alt="Songside AI Explanation" src="YOUR_THIRD_IMAGE_LINK">
+
+### Artist page integration
+
+<img width="1470" alt="Songside Artist Page" src="YOUR_FOURTH_IMAGE_LINK">
 
 ---
 
 ## ✨ Features
 
 - 🎵 Live Spotify song detection
-- 🎤 Synchronized lyrics
+- 🎤 Synchronized lyrics overlay
 - 🤖 AI-powered lyric explanations
-- 🪟 Floating always-on-top overlay
+- 🪟 Floating always-on-top window
 - 🎯 Click-through mode
-- 📌 System tray integration
+- 📌 Menu bar integration
+- 🎨 Album artwork color extraction
 
 ---
 
@@ -32,7 +51,7 @@ Install dependencies:
 npm install
 ```
 
-Start the development server:
+Run the application:
 
 ```bash
 npm run dev
@@ -44,17 +63,17 @@ npm run dev
 
 Create a `.env` file inside the `songside` directory.
 
-Example:
-
 ```env
 SPOTIFY_CLIENT_ID=your_spotify_client_id
 GEMINI_KEY=your_gemini_api_key
 LLM_PROVIDER=gemini
 ```
 
-> Configure your Spotify application with the redirect URI:
->
-> `http://127.0.0.1:8888/callback`
+Configure your Spotify Developer application with the redirect URI:
+
+```
+http://127.0.0.1:8888/callback
+```
 
 ---
 
@@ -84,16 +103,33 @@ npm run build:linux
 
 - Electron
 - React
+- TypeScript
 - Vite
 - Spotify Web API
-- Gemini API
+- Google Gemini API
+
+---
+
+## 🗺️ Roadmap
+
+- AI conversations about songs
+- More LLM providers
+- Better lyric synchronization
+- Theme customization
+- Translation support
+
+---
+
+## ⚠️ Disclaimer
+
+Songside is an independent project and is not affiliated with or endorsed by Spotify.
 
 ---
 
 ## 📄 License
 
-MIT License
+MIT License.
 
 ---
 
-Part of the **Melora** project.
+Built as part of the **Melora** project.
