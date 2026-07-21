@@ -2,28 +2,25 @@
 
 An AI-powered desktop companion for Spotify that displays synchronized lyrics in a floating overlay and explains song meanings in real time while you listen.
 
----
-
 ## 📸 Screenshots
 
 ### Songside running on Spotify
 
-<img width="1470" alt="Songside Hero" src="YOUR_FIRST_IMAGE_LINK">
+<img width="1470" alt="Songside Hero" src="https://github.com/user-attachments/assets/5b7b9dca-cf6d-4c77-b697-a43052bb8cc4" />
 
 ### Floating overlay while coding
 
-<img width="1470" alt="Songside VS Code" src="YOUR_SECOND_IMAGE_LINK">
+<img width="1470" alt="Songside VS Code" src="https://github.com/user-attachments/assets/7e603f9d-a290-47dc-be75-363057f7d09e" />
 
 ### AI lyric explanation
 
-<img width="373" alt="Songside AI Explanation" src="YOUR_THIRD_IMAGE_LINK">
+<img width="373" alt="Songside AI Explanation" src="https://github.com/user-attachments/assets/0160ffdc-25ab-4d68-bfc1-b6a5d799813d" />
 
 ### Artist page integration
 
-<img width="1470" alt="Songside Artist Page" src="YOUR_FOURTH_IMAGE_LINK">
+<img width="1470" alt="Songside Artist Page" src="https://github.com/user-attachments/assets/c403bb55-6914-49f8-b06b-e874888dac4e" />
 
 ---
-
 ## ✨ Features
 
 - 🎵 Live Spotify song detection
