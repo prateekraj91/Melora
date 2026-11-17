@@ -1,5 +1,5 @@
 import 'dotenv/config'
-import { app, shell, BrowserWindow, ipcMain, screen, globalShortcut } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, screen, globalShortcut, components } from 'electron'
 import { loginSpotify, getCurrentlyPlaying, seekTo, isConnected } from './spotify.js'
 import { getAlbumColor } from './color.js'
 import { getLyricMeaning, getMood, getWeeklyDigest, ensureOllama } from './llm.js'
@@ -157,7 +157,9 @@ function createOverlayController(win) {
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  await components.whenReady()
+  console.log('[drm]', components.status())
   // Set app user model id for windows
   electronApp.setAppUserModelId('com.electron')
 
