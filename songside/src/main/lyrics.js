@@ -10,6 +10,8 @@
 // smoothly without hammering the Spotify API at 2 req/s.
 
 import { getCurrentlyPlaying, isConnected } from './spotify.js'
+import * as playerStore from './state/playerStore.js'
+import { PUSH } from '../shared/ipc.js'
 
 const LRCLIB_BASE = 'https://lrclib.net/api'
 // LRCLIB asks clients to identify themselves with a User-Agent.
@@ -39,6 +41,34 @@ function buildSyncedFrame(lines, idx, meta) {
     active: idx >= 0 ? lineOf(lines[idx]) : null,
     next: lines.slice(start, start + UPCOMING).map(lineOf)
   }
+}
+
+// ---- v2 store adapters -----------------------------------------------------
+// The engine also feeds the v2 playerStore (see state/playerStore.js). These
+// writes are additive: the v1 'lyrics:update' frames are unchanged.
+
+/** @returns {import('../shared/types.js').Track} */
+function toTrack(item) {
+  return {
+    id: item.id,
+    uri: item.uri ?? `spotify:track:${item.id}`,
+    name: item.name ?? '',
+    artist: item.artists?.map((a) => a.name).join(', ') ?? '',
+    album: item.album?.name ?? '',
+    art: item.album?.images?.[0]?.url ?? null,
+    durationMs: item.duration_ms ?? 0
+  }
+}
+
+/** @returns {import('../shared/types.js').LyricsDoc} */
+function toLyricsDoc(trackId, lyrics, durationMs) {
+  const synced = lyrics.mode === 'synced' ? lyrics.synced : []
+  const lines = synced.map((l, i) => ({
+    time: l.time,
+    endTime: i + 1 < synced.length ? synced[i + 1].time : Math.max(durationMs || 0, l.time),
+    text: l.text
+  }))
+  return { trackId, mode: lyrics.mode, lines, plain: lyrics.plain ?? null }
 }
 
 // ---- LRC parsing -----------------------------------------------------------
@@ -181,6 +211,7 @@ export function applySeek(positionMs) {
   engine.anchorAt = Date.now()
   engine.activeIdx = -1 // force tick() to recompute and push a fresh frame
   engine.tick()
+  playerStore.update({ positionMs: engine.anchorMs, positionAt: engine.anchorAt })
 }
 
 class SyncEngine {
@@ -188,6 +219,7 @@ class SyncEngine {
     this.win = mainWindow
     this.trackId = null
     this.songName = ''
+    this.durationMs = 0
     this.lyrics = { mode: 'none', synced: [], plain: null }
 
     // Position anchor: at wall-clock `anchorAt`, playback was `anchorMs` into
@@ -230,12 +262,23 @@ class SyncEngine {
     if (!item) {
       // Nothing playing. Distinguish "connected but idle / Spotify quit" (hide
       // the overlay) from "never connected" (keep it up for the Connect button).
-      emitPlayback(isConnected() ? 'none' : 'disconnected')
+      const connected = isConnected()
+      emitPlayback(connected ? 'none' : 'disconnected')
+      playerStore.update({
+        connected,
+        status: connected ? 'idle' : 'disconnected',
+        track: null,
+        isPlaying: false,
+        positionMs: 0,
+        positionAt: 0,
+        device: null
+      })
       if (this.trackId !== null) {
         this.trackId = null
         this.songName = ''
         this.lyrics = { mode: 'none', synced: [], plain: null }
         this.send({ mode: 'none', trackId: null, songName: '' })
+        playerStore.setLyricsDoc(null)
       }
       return
     }
@@ -245,10 +288,23 @@ class SyncEngine {
     this.anchorAt = Date.now()
     this.isPlaying = playing.is_playing ?? true
     emitPlayback(this.isPlaying ? 'playing' : 'paused')
+    const trackChanged = item.id !== this.trackId
+    if (trackChanged) playerStore.setLyricsDoc(null)
+    playerStore.update({
+      connected: true,
+      status: this.isPlaying ? 'playing' : 'paused',
+      track: toTrack(item),
+      positionMs: this.anchorMs,
+      positionAt: this.anchorAt,
+      isPlaying: this.isPlaying,
+      volume: playing.device?.volume_percent ?? playerStore.getState().volume,
+      device: 'spotify-app'
+    })
 
-    if (item.id !== this.trackId) {
+    if (trackChanged) {
       this.trackId = item.id
       this.songName = item.name
+      this.durationMs = item.duration_ms ?? 0
       this.activeIdx = -1
       this.lyricsLoaded = false
       // Drop the previous song's lines immediately so tick() can't push them
@@ -291,6 +347,7 @@ class SyncEngine {
     if (forId !== this.trackId) return
     this.lyrics = lyrics
     this.lyricsLoaded = true
+    playerStore.setLyricsDoc(toLyricsDoc(forId, lyrics, item.duration_ms ?? this.durationMs))
 
     if (lyrics.mode === 'synced') {
       // Emit an initial frame so the overlay enters synced mode immediately
@@ -338,7 +395,7 @@ class SyncEngine {
 
   send(payload) {
     if (this.win && !this.win.isDestroyed()) {
-      this.win.webContents.send('lyrics:update', payload)
+      this.win.webContents.send(PUSH.LYRICS_UPDATE, payload)
     }
   }
 }

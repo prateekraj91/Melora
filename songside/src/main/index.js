@@ -6,6 +6,9 @@ import { getLyricMeaning, getMood, getWeeklyDigest, ensureOllama } from './llm.j
 import { startLyricsSync, applySeek, onPlaybackState } from './lyrics.js'
 import { createTray } from './tray.js'
 import store, { clearSpotifyTokens } from './store.js'
+import * as playerStore from './state/playerStore.js'
+import { createFullscreenController } from './windows/fullscreen.js'
+import { INVOKE, SEND } from '../shared/ipc.js'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
@@ -180,7 +183,7 @@ app.whenReady().then(() => {
   })
 
   // IPC test
-  ipcMain.on('ping', () => console.log('pong'))
+  ipcMain.on(SEND.PING, () => console.log('pong'))
 
   const mainWindow = createWindow()
 
@@ -189,7 +192,7 @@ app.whenReady().then(() => {
   // meaning, buttons); interactive=false → ignore mouse events so clicks fall
   // through to the app behind the overlay. Kept on the lightweight `.send`
   // channel so toggling on every hover boundary stays cheap.
-  ipcMain.on('overlay:set-interactive', (_event, interactive) => {
+  ipcMain.on(SEND.OVERLAY_SET_INTERACTIVE, (_event, interactive) => {
     if (!mainWindow.isDestroyed()) mainWindow.setIgnoreMouseEvents(!interactive, { forward: true })
   })
 
@@ -198,6 +201,32 @@ app.whenReady().then(() => {
 
   // ⌥⌘L hard toggle (e.g. tuck the overlay away before opening Control Center).
   globalShortcut.register('Alt+Command+L', () => overlay.toggle())
+
+  // ---- v2 foundation -------------------------------------------------------
+  // Player store: renderers fetch its state/lyrics doc over these handlers and
+  // then follow the player:state / lyrics:doc broadcasts.
+  playerStore.registerPlayerStoreIpc()
+
+  // Album colour lives in the store so every window tints from the same value.
+  // Recomputed only when the art URL changes; a stale result (track moved on
+  // while extracting) is dropped.
+  playerStore.subscribe(async (next, prev) => {
+    const art = next.track?.art ?? null
+    if (art === (prev.track?.art ?? null)) return
+    if (!art) {
+      playerStore.update({ color: null, palette: [] })
+      return
+    }
+    const color = await getAlbumColor(art)
+    if ((playerStore.getState().track?.art ?? null) !== art) return
+    playerStore.update({ color, palette: color ? [color] : [] })
+  })
+
+  // Fullscreen listening mode (stub until task 1.3).
+  const fullscreen = createFullscreenController({ overlay })
+  ipcMain.on(SEND.WINDOW_FULLSCREEN_TOGGLE, () => fullscreen.toggle())
+  ipcMain.on(SEND.WINDOW_FULLSCREEN_CLOSE, () => fullscreen.close())
+  globalShortcut.register('Alt+Space', () => fullscreen.toggle())
 
   // Drive visibility from the lyrics engine's playback state. Registered BEFORE
   // startLyricsSync so we don't miss the engine's very first emit.
@@ -238,40 +267,40 @@ app.whenReady().then(() => {
   // 'lyrics:update'. No-ops harmlessly until the user has connected Spotify.
   startLyricsSync(mainWindow)
 
-  ipcMain.handle('spotify:login', async () => {
+  ipcMain.handle(INVOKE.SPOTIFY_LOGIN, async () => {
     return await loginSpotify(mainWindow)
   })
 
-  ipcMain.handle('spotify:currently-playing', async () => {
+  ipcMain.handle(INVOKE.SPOTIFY_CURRENTLY_PLAYING, async () => {
     return await getCurrentlyPlaying()
   })
 
-  ipcMain.handle('spotify:is-connected', () => {
+  ipcMain.handle(INVOKE.SPOTIFY_IS_CONNECTED, () => {
     return isConnected()
   })
 
   // Click-to-seek: jump Spotify playback to a lyric line's timestamp, then
   // re-anchor the sync engine so the active line snaps to it immediately instead
   // of waiting for the next 3s Spotify poll.
-  ipcMain.handle('spotify:seek', async (_event, positionMs) => {
+  ipcMain.handle(INVOKE.SPOTIFY_SEEK, async (_event, positionMs) => {
     const ok = await seekTo(positionMs)
     if (ok) applySeek(positionMs)
     return ok
   })
 
-  ipcMain.handle('color:album', async (_event, imageUrl) => {
+  ipcMain.handle(INVOKE.COLOR_ALBUM, async (_event, imageUrl) => {
     return await getAlbumColor(imageUrl)
   })
 
-  ipcMain.handle('llm:lyric-meaning', async (_event, song, artist, lyric) => {
+  ipcMain.handle(INVOKE.LLM_LYRIC_MEANING, async (_event, song, artist, lyric) => {
     return await getLyricMeaning(song, artist, lyric)
   })
 
-  ipcMain.handle('llm:mood', async (_event, song, artist) => {
+  ipcMain.handle(INVOKE.LLM_MOOD, async (_event, song, artist) => {
     return await getMood(song, artist)
   })
 
-  ipcMain.handle('llm:weekly-digest', async (_event, log) => {
+  ipcMain.handle(INVOKE.LLM_WEEKLY_DIGEST, async (_event, log) => {
     return await getWeeklyDigest(log)
   })
 
@@ -282,7 +311,7 @@ app.whenReady().then(() => {
   })
 })
 
-// Release the global ⌥⌘L shortcut when quitting.
+// Release the global shortcuts (⌥⌘L, ⌥Space) when quitting.
 app.on('will-quit', () => {
   globalShortcut.unregisterAll()
 })
