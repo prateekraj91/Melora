@@ -8,6 +8,7 @@ import { createTray } from './tray.js'
 import store, { clearSpotifyTokens } from './store.js'
 import * as playerStore from './state/playerStore.js'
 import { createFullscreenController } from './windows/fullscreen.js'
+import { appWebPreferences } from './windows/webPreferences.js'
 import { INVOKE, SEND } from '../shared/ipc.js'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
@@ -47,12 +48,7 @@ function createWindow() {
     backgroundColor: '#00000000',
     autoHideMenuBar: true,
     ...(process.platform === 'linux' ? { icon } : {}),
-    webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
-      sandbox: false,
-      contextIsolation: true,
-      nodeIntegration: false
-    }
+    webPreferences: appWebPreferences()
   })
 
   // Float above full-screen apps and other always-on-top windows.
@@ -224,8 +220,8 @@ app.whenReady().then(async () => {
     playerStore.update({ color, palette: color ? [color] : [] })
   })
 
-  // Fullscreen listening mode (stub until task 1.3).
-  const fullscreen = createFullscreenController({ overlay })
+  // Fullscreen listening mode (windows/fullscreen.js).
+  const fullscreen = createFullscreenController()
   ipcMain.on(SEND.WINDOW_FULLSCREEN_TOGGLE, () => fullscreen.toggle())
   ipcMain.on(SEND.WINDOW_FULLSCREEN_CLOSE, () => fullscreen.close())
   globalShortcut.register('Alt+Space', () => fullscreen.toggle())

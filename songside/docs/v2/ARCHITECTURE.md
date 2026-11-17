@@ -11,11 +11,11 @@ bridge and hooks, and stubs.
 
 ## Processes and windows
 
-| Window            | Status                                             | Route                | Purpose                                                                                                                              |
-| ----------------- | -------------------------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| **Overlay**       | v1, live                                           | `/` (no hash)        | Small transparent always-on-top lyrics pill. Auto shows/hides off playback. ⌥⌘L toggles.                                             |
-| **Fullscreen**    | stub (`main/windows/fullscreen.js`) — built in 1.3 | `#/fullscreen`       | Immersive listening mode. ⌥Space toggles, Esc closes.                                                                                |
-| **Hidden player** | later (Web Playback SDK)                           | `#/player` (planned) | Invisible window that hosts the SDK so SongSide itself can be a Spotify Connect device (`device: 'songside'`). Feeds the same store. |
+| Window            | Status                                   | Route                | Purpose                                                                                                                              |
+| ----------------- | ---------------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| **Overlay**       | v1, live                                 | `/` (no hash)        | Small transparent always-on-top lyrics pill. Auto shows/hides off playback. ⌥⌘L toggles.                                             |
+| **Fullscreen**    | live (`main/windows/fullscreen.js`, 1.3) | `#/fullscreen`       | Immersive listening mode. ⌥Space toggles, Esc closes.                                                                                |
+| **Hidden player** | later (Web Playback SDK)                 | `#/player` (planned) | Invisible window that hosts the SDK so SongSide itself can be a Spotify Connect device (`device: 'songside'`). Feeds the same store. |
 
 All windows load the **same renderer bundle** and pick their UI by hash
 (`renderer/src/App.jsx`). All windows share the same preload.
@@ -88,7 +88,7 @@ songside/
       index.js               app wiring, IPC, hotkeys
       lyrics.js              v1 LRCLIB engine (+ writes to the store)
       state/playerStore.js   single source of truth
-      windows/fullscreen.js  fullscreen controller (stub → 1.3)
+      windows/fullscreen.js  fullscreen controller (1.3)
       spotify.js color.js llm.js store.js tray.js   (v1)
     preload/index.js
     renderer/src/
