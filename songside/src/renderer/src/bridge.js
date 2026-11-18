@@ -9,6 +9,7 @@
 // directly; don't add new callers of window.api — go through here.
 
 import { INVOKE, SEND, PUSH } from '../../shared/ipc.js'
+import { isMock, mockState, mockLyrics } from './dev/mockPlayer.js'
 
 export { INVOKE, SEND, PUSH }
 
@@ -21,13 +22,19 @@ const noop = () => {}
 /** True when running inside Electron with the preload bridge available. */
 export const hasBridge = !!api
 
+// Dev-only: with no preload and `?mock` in the URL, serve a fake playing track
+// so the visuals can be checked in a plain browser (see dev/mockPlayer.js).
+const mock = import.meta.env?.DEV && isMock()
+
 /** @returns {Promise<PlayerState|null>} */
 export function getPlayerState() {
+  if (mock) return Promise.resolve(mockState())
   return api?.getPlayerState ? api.getPlayerState() : Promise.resolve(null)
 }
 
 /** @returns {Promise<LyricsDoc|null>} */
 export function getLyricsDoc() {
+  if (mock) return Promise.resolve(mockLyrics())
   return api?.getLyricsDoc ? api.getLyricsDoc() : Promise.resolve(null)
 }
 
