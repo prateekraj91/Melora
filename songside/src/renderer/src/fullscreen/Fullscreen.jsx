@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { usePlayer } from '../hooks/usePlayer'
 import { usePlaybackClock } from '../hooks/usePlaybackClock'
-import { closeFullscreen } from '../bridge'
+import { closeFullscreen, runCommand } from '../bridge'
+import { useKeyboardControls } from '../input/keys'
 import { useIdleHide } from './useIdleHide'
 import { useActiveWord, useTimedDoc } from '../lyrics/useActiveWord'
 import FadedLyrics from '../lyrics/FadedLyrics'
@@ -48,9 +49,11 @@ export default function Fullscreen() {
     return () => cancelAnimationFrame(raf)
   }, [getAudio])
 
+  // Space / arrows / L / Esc (input/keys.js).
+  useKeyboardControls({ onCommand: (cmd) => runCommand(cmd), onClose: closeFullscreen })
+
   useEffect(() => {
     const onKey = (e) => {
-      if (e.key === 'Escape') closeFullscreen()
       // Dev only: D toggles the audio debug overlay.
       if (DEV && (e.key === 'd' || e.key === 'D') && !e.metaKey && !e.ctrlKey) {
         setDebug((v) => !v)

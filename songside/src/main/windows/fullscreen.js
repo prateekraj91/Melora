@@ -60,9 +60,11 @@ function createWindow() {
 }
 
 /**
+ * @param {{ onShow?: () => void, onHide?: () => void }} [hooks]  called when
+ *   the window is shown / hidden (e.g. to take the media keys while open)
  * @returns {{ open: () => void, close: () => void, toggle: () => void, isOpen: () => boolean }}
  */
-export function createFullscreenController() {
+export function createFullscreenController(hooks = {}) {
   /** @type {BrowserWindow|null} */
   let win = null
 
@@ -74,7 +76,11 @@ export function createFullscreenController() {
   const isOpen = () => !!win && !win.isDestroyed() && win.isVisible()
 
   const open = () => {
-    if (!win || win.isDestroyed()) win = createWindow()
+    if (!win || win.isDestroyed()) {
+      win = createWindow()
+      win.on('show', () => hooks.onShow?.())
+      win.on('hide', () => hooks.onHide?.())
+    }
     win.setBounds(cursorDisplayBounds())
     app.focus({ steal: true })
     win.show()

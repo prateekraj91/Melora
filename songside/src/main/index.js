@@ -9,6 +9,7 @@ import {
   refreshAccessToken
 } from './spotify.js'
 import { createCommandRunner } from './spotify/commands.js'
+import { createMediaKeys } from './input/mediaKeys.js'
 import { getAlbumColor, getAlbumPalette } from './color.js'
 import { getLyricMeaning, getMood, getWeeklyDigest, ensureOllama } from './llm.js'
 import { startLyricsSync, applySeek, onPlaybackState, pollNow } from './lyrics.js'
@@ -250,8 +251,13 @@ app.whenReady().then(async () => {
   // + loopback audio (audio/capture.js).
   registerDisplayMediaHandler()
 
-  // Fullscreen listening mode (windows/fullscreen.js).
-  const fullscreen = createFullscreenController()
+  // Fullscreen listening mode (windows/fullscreen.js). Media keys are taken
+  // only while it is showing (input/mediaKeys.js explains why).
+  const mediaKeys = createMediaKeys(runCommand)
+  const fullscreen = createFullscreenController({
+    onShow: () => mediaKeys.enable(),
+    onHide: () => mediaKeys.disable()
+  })
   ipcMain.on(SEND.WINDOW_FULLSCREEN_TOGGLE, () => fullscreen.toggle())
   ipcMain.on(SEND.WINDOW_FULLSCREEN_CLOSE, () => fullscreen.close())
   globalShortcut.register('Alt+Space', () => fullscreen.toggle())

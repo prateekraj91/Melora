@@ -220,3 +220,39 @@ returns 403 (logged as `forbidden (403 …)`), everything else works.
 
 **Untested live:** every command against the real Spotify app. Volume via
 the Web API may be refused for some devices (403 `VOLUME_CONTROL_DISALLOW`).
+
+---
+
+## 2.2 — Keyboard + media keys
+
+**Built**
+
+- `input/keys.js`: pure `keyAction(event)` + `useKeyboardControls({onCommand,
+onClose})`, used by `Fullscreen.jsx` (replaces the old Esc-only handler).
+  Space = toggle, ← / → = prev / next, ↑ / ↓ = volume ±10, L = like,
+  Esc = close. Ignored while a text field is focused and whenever ⌘/Ctrl/⌥ is
+  held. Only volume auto-repeats when a key is held. 6 tests.
+- `main/input/mediaKeys.js`: MediaPlayPause / MediaNextTrack /
+  MediaPreviousTrack as globalShortcuts → `runCommand`, each only if
+  `register()` succeeds (logged otherwise).
+- `createFullscreenController({onShow, onHide})` now reports the window's
+  show / hide so main can take / release the media keys.
+
+**Decisions**
+
+- Media keys are registered **only while fullscreen is showing**. Spotify
+  itself already reacts to media keys; if SongSide held them all the time a
+  press could be handled twice (Web API toggle + Spotify's own toggle = no
+  change). Logged as `[media-keys] registered: …` on open.
+- On macOS, media keys as global shortcuts need the app to be a trusted
+  accessibility client. We check **without prompting**; if not trusted we log
+  `[media-keys] not registered: …` and skip. To enable: System Settings →
+  Privacy & Security → Accessibility → add Electron (dev) / songside.
+
+**Checked overnight:** key mapping tests; in the browser mock Space → toggle,
+→ → next, ↑ → volume +10, L → like all reach the (mock) command executor.
+
+**Untested live:** keys driving the real Spotify app; media keys (needs the
+accessibility permission above) and whether Spotify ALSO reacts to the same
+press while fullscreen is open (if play/pause seems to do nothing, that's the
+double-toggle — tell me and I'll switch media keys off).
