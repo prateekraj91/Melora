@@ -94,9 +94,14 @@
  * @typedef {Object} EffectLayer
  * @property {string} id
  * @property {(ctx: CanvasRenderingContext2D, opts: EffectInitOptions) => void} init
- * @property {(t: number, dt: number, audio: AudioFrame) => void} frame
- * @property {(w: number, h: number) => void} resize
+ * @property {(t: number, dt: number, audio: AudioFrame, fade?: number) => void} frame
+ *   t in ms, dt in SECONDS (clamped). `fade` 0–1 is the scene's crossfade
+ *   weight: multiply every globalAlpha by it. Draw in CSS pixels (the stack
+ *   sets the DPR transform); the stack save()/restore()s around each frame.
+ * @property {(w: number, h: number) => void} resize   CSS pixels
  * @property {() => void} dispose
+ * @property {(palette: string[]) => void} [setPalette]  new album palette
+ * @property {(intensity: number) => void} [setIntensity]  0–1
  */
 
 /**

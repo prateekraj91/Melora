@@ -348,3 +348,90 @@ round trip timing for the slide-in (it waits for the new lyrics doc; slow
 LRCLIB lookups fall back at 1.5s). To see the hint again, run
 `localStorage.removeItem('songside.v2.hintsShown')` in the fullscreen
 window's devtools.
+
+---
+
+## 3.3 — Effect layers
+
+**Built**
+
+- `visuals/effects/kit.js`: shared helpers. Pure (tested): `SCENES`,
+  `DEFAULT_SCENE` ('chill'), `nextScene`, seeded `makeRng`, `countFor`
+  (intensity → active pool prefix), `approach`, `beatEnvelope`,
+  `stepWeight`/`smooth` (crossfade), `lift`/`shade`/`rankBy`/`warmth`
+  colour helpers. Sprites (not unit-tested): glow, bokeh, petal, beam, drop,
+  smoke, vignette — pre-rendered to small OffscreenCanvases **once per
+  palette**.
+- One file per scene, each a factory returning an `EffectLayer`:
+  - `chill`: 6–18 slow bokeh orbs, breathing, a little bigger and brighter
+    with energy.
+  - `christmas`: 50–240 snowflakes at 3 depths (size / speed / sway /
+    alpha), plus 22 fairy-light bulbs on a sagging wire along the top,
+    twinkling.
+  - `rock`: 3–5 light cones from below the stage, sweeping. Beats push the
+    sweep forward and flash them. 20–90 embers rise and fade. A ≤2px shake
+    on kicks (beat with bass > 0.45), scaled by intensity.
+  - `rain`: 60–260 slanted streaks (one path per colour, three colours),
+    plus 10–34 drops on the glass that stick, then slide in stop-and-go
+    runs.
+  - `love`: 10–42 petals that fall, sway, spin and "flip" (scaleY), plus 4
+    big warm glows breathing slowly. Uses the warmest palette entries.
+  - `edm`: rings expand from the centre on each beat (a pool of 10, halo +
+    core stroke). Without beats (no audio permission) a soft ring every
+    1.6s. Plus 2–6 soft lasers from the top corners, sweeping slowly.
+  - `hiphop`: 6–18 big slow smoke wisps rising and rotating, plus a
+    vignette in a near-black shade of the darkest palette colour that
+    deepens with the (smoothed) bass.
+- `visuals/effects/scenes.js`: name → factory.
+- `visuals/effects/EffectStack.jsx`: one Canvas2D between the background
+  and the lyrics. DPR ≤ 1.5, one rAF loop that reads props through refs,
+  pauses while hidden, audio from `useAudioFrame`'s getter.
+- `Fullscreen.jsx`: scene state, default 'chill'. **Dev builds only:**
+  pressing S cycles the scenes and the name shows faintly top-right for 1s.
+
+**Decisions**
+
+- **Contract additions** (`shared/types.js`):
+  - `frame(t, dt, audio, fade)` gets a 4th argument: the crossfade weight
+    0–1, which each layer multiplies into every alpha. One canvas means
+    layers can't be faded by the stack itself.
+  - `dt` is in seconds (clamped to 50ms).
+  - Two optional methods: `setPalette` (album change) and `setIntensity`.
+  - The stack wraps each `frame()` in save()/restore() and sets the DPR
+    transform, so layers draw in CSS pixels.
+- **Crossfade** is a linear weight per live layer moving towards 1
+  (current scene) or 0 over 1.5s, drawn through smoothstep. Pressing S
+  quickly reverses a fade mid-way with no jump. Layers are disposed when
+  their weight reaches 0.
+- **No per-frame allocation**:
+  - Particles live in fixed pools sized for intensity 1; intensity only
+    changes how many are active.
+  - Colour strings and gradients are built at palette time.
+  - The frame loop has no closures, array methods or new objects. The one
+    exception: an edm ring spawn on a beat uses `Array.find` (one closure
+    per beat, not per frame).
+- Colours come only from `state.palette` (lifted towards white for pastel).
+  The snow is the first palette colour lifted 85% towards white. The
+  hiphop vignette is the darkest palette colour × 0.12.
+- Intensity is fixed at 0.6 until the AI scene choice (3.2) supplies one.
+
+**Checked overnight:**
+
+- Tests:
+  - kit helpers.
+  - Every layer on a fake 2D context for 600 frames: no throw, every alpha
+    in [0,1], nothing drawn at fade 0, more drawn at intensity 1 than at 0,
+    and resize, re-palette (including an empty palette) and dispose.
+- In the browser mock: screenshots of all 7 scenes, cycled with S. Each
+  scene keeps a 16.7ms median frame time (p95 ≈ 18.7ms) on a small
+  viewport, with no console errors. The canvas backing store is 1.5× its
+  CSS size on a 2× display.
+
+**Untested live:**
+
+- Performance at full 5K/6K resolution with the WebGL background on a real
+  display.
+- How beat-driven scenes (rock, edm) feel with real system audio. In the
+  mock they run on the synthetic 120 bpm.
+- Whether the soft scenes (hiphop smoke especially) are visible enough on
+  bright album palettes.

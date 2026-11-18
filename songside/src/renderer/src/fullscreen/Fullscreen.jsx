@@ -8,6 +8,8 @@ import { useIdleHide } from './useIdleHide'
 import { useActiveWord, useTimedDoc } from '../lyrics/useActiveWord'
 import FadedLyrics from '../lyrics/FadedLyrics'
 import DreamyBackground from '../visuals/background/DreamyBackground'
+import EffectStack from '../visuals/effects/EffectStack'
+import { DEFAULT_SCENE, nextScene } from '../visuals/effects/kit'
 import { useAudioFrame } from '../audio/useAudioFrame'
 import AudioDebug from '../audio/AudioDebug'
 import { stepPulse, glowOpacity } from '../audio/pulse'
@@ -38,6 +40,22 @@ export default function Fullscreen() {
   const getActive = useActiveWord(lyrics, now)
   const getAudio = useAudioFrame()
   const [debug, setDebug] = useState(false)
+  // Scene source for now: default 'chill', dev builds cycle with S (task 3.3).
+  // The AI scene choice (task 3.2) will replace this.
+  const [scene, setScene] = useState(DEFAULT_SCENE)
+  const sceneLabelRef = useRef(null)
+  const sceneShown = useRef(scene)
+  useEffect(() => {
+    const el = sceneLabelRef.current
+    if (sceneShown.current === scene || !el) return
+    sceneShown.current = scene
+    el.textContent = scene
+    el.getAnimations().forEach((a) => a.cancel())
+    el.animate([{ opacity: 0.4 }, { opacity: 0.4, offset: 0.7 }, { opacity: 0 }], {
+      duration: 1000,
+      easing: 'ease-out'
+    })
+  }, [scene])
 
   // Pulse (task 1.8): one rAF loop smooths bass/energy/beats into a 0–1 value
   // that drives the background. Kept in a ref — never React state.
@@ -84,6 +102,10 @@ export default function Fullscreen() {
       if (DEV && (e.key === 'd' || e.key === 'D') && !e.metaKey && !e.ctrlKey) {
         setDebug((v) => !v)
       }
+      // Dev only: S cycles the effect scene.
+      if (DEV && (e.key === 's' || e.key === 'S') && !e.metaKey && !e.ctrlKey && !e.repeat) {
+        setScene((s) => nextScene(s))
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -105,6 +127,9 @@ export default function Fullscreen() {
       >
         {/* background */}
         <DreamyBackground palette={state?.palette} energy={pulseEnergy} />
+
+        {/* effects */}
+        <EffectStack scene={scene} palette={state?.palette} getAudio={getAudio} />
 
         {/* volume glow: brighter centre at higher volume */}
         <div
@@ -172,6 +197,13 @@ export default function Fullscreen() {
         {HINT_TEXT}
       </div>
 
+      {DEV && (
+        <div
+          ref={sceneLabelRef}
+          className="pointer-events-none absolute top-[4vh] right-[4vw] text-[12px] font-light tracking-[0.2em] text-white"
+          style={{ opacity: 0 }}
+        />
+      )}
       {DEV && debug && <AudioDebug getFrame={getAudio} />}
     </div>
   )
