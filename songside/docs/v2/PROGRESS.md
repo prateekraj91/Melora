@@ -103,3 +103,56 @@ again), and `getPalette` on a Node Buffer with a generated test image.
 
 **Untested live:** real album art → palette in Electron, the 2s crossfade on a
 real track change, the CSS fallback path.
+
+---
+
+## 1.7 — System audio + beats
+
+**Built**
+
+- Main `main/audio/capture.js`: `setDisplayMediaRequestHandler` answers every
+  `getDisplayMedia` with the first `desktopCapturer` screen and
+  `audio: 'loopback'` (no picker). Any failure or no source → logged and the
+  request is denied, so the renderer just runs silently.
+- **macOS loopback switch:** Electron's typings say loopback is Windows-only,
+  but this castLabs 42.11.18 build's Chromium contains the feature
+  `MacCatapLoopbackAudioForScreenShare` (Core Audio taps, macOS 14.2+; this
+  Mac is on 26.3.1). `enableLoopbackFeatures()` appends it to
+  `--enable-features` before `ready`. Also added
+  `NSAudioCaptureUsageDescription` to `electron-builder.yml` for packaged
+  builds (the dev Electron.app already has one).
+- `audio/analyser.js` (pure, 14 tests on synthetic spectra): bass 20–150 Hz,
+  mid 150–2k, treble 2–12k; per-band auto-gain against a peak with a 4s
+  half-life; spectral flux ≤ 4 kHz vs adaptive threshold mean + 1.5·std over
+  the last 1s; 280ms refractory; bpm = median inter-beat interval folded into
+  70–180, `null` until ≥ 4 consistent intervals. Allocation-free per frame.
+- `audio/audioEngine.js` + `audio/useAudioFrame.js`: ONE shared, ref-counted
+  capture (getDisplayMedia → stop video track → AudioContext → AnalyserNode
+  fftSize 2048 / smoothing 0.6, not connected to the speakers). The hook
+  returns a stable getter; zero frame when unavailable.
+- Dev only: **D** in fullscreen toggles `audio/AudioDebug.jsx` (bars, bpm,
+  capture status, beat flash).
+- `AudioFrame.bpm` is now `number|null` in `shared/types.js`.
+
+**Decisions**
+
+- Capture **stops while the fullscreen window is hidden** (it's hidden, not
+  destroyed) and restarts when shown, so macOS isn't recording in the
+  background and the menu-bar recording indicator goes away when you close
+  fullscreen. (Spec said start on mount / stop on unmount; the component
+  never unmounts, so visibility is the meaningful lifetime.)
+- Chromium may demand a user gesture for `getDisplayMedia`. If the first
+  attempt fails with `InvalidStateError`/`NotAllowedError`, it retries once
+  on the next click or key press.
+- Outside Electron (browser / future screensaver) the engine never calls
+  `getDisplayMedia` (it would open the browser's picker). With `?mock` in dev
+  it feeds a synthetic 120 bpm frame instead (`dev/mockAudio.js`).
+
+**Checked overnight:** analyser unit tests; the D overlay in the browser mock
+(bars move, bpm 120, flash on beats).
+
+**Untested live (important):** real system-audio capture. On first fullscreen
+open macOS should ask for **Screen & System Audio Recording** permission for
+Electron (dev) / songside (packaged). Grant it, then you may have to close and
+reopen fullscreen (or restart the app). Check the terminal for `[audio]` lines
+(`running (48000 Hz)` = good; `capture failed …` = tell me the message).

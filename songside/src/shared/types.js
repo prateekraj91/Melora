@@ -65,7 +65,7 @@
  * @property {number} treble
  * @property {number} energy
  * @property {boolean} beat   True on the frame a beat was detected
- * @property {number} bpm     Estimated tempo, 0 if unknown
+ * @property {number|null} bpm  Estimated tempo, null until stable
  */
 
 /**

@@ -6,6 +6,10 @@ import { useIdleHide } from './useIdleHide'
 import { useActiveWord, useTimedDoc } from '../lyrics/useActiveWord'
 import FadedLyrics from '../lyrics/FadedLyrics'
 import DreamyBackground from '../visuals/background/DreamyBackground'
+import { useAudioFrame } from '../audio/useAudioFrame'
+import AudioDebug from '../audio/AudioDebug'
+
+const DEV = import.meta.env.DEV
 
 const zeroEnergy = () => 0
 
@@ -28,10 +32,16 @@ export default function Fullscreen() {
   }, [])
   const timed = useTimedDoc(lyrics)
   const getActive = useActiveWord(lyrics, now)
+  const getAudio = useAudioFrame()
+  const [debug, setDebug] = useState(false)
 
   useEffect(() => {
     const onKey = (e) => {
       if (e.key === 'Escape') closeFullscreen()
+      // Dev only: D toggles the audio debug overlay.
+      if (DEV && (e.key === 'd' || e.key === 'D') && !e.metaKey && !e.ctrlKey) {
+        setDebug((v) => !v)
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -59,6 +69,8 @@ export default function Fullscreen() {
           <div className="truncate text-[13px] text-white/70">{track?.artist ?? ''}</div>
         </div>
       </div>
+
+      {DEV && debug && <AudioDebug getFrame={getAudio} />}
     </div>
   )
 }

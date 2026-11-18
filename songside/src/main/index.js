@@ -9,10 +9,14 @@ import store, { clearSpotifyTokens } from './store.js'
 import * as playerStore from './state/playerStore.js'
 import { createFullscreenController } from './windows/fullscreen.js'
 import { appWebPreferences } from './windows/webPreferences.js'
+import { enableLoopbackFeatures, registerDisplayMediaHandler } from './audio/capture.js'
 import { INVOKE, SEND } from '../shared/ipc.js'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
+
+// v2 system audio: Chromium feature switches must be set before 'ready'.
+enableLoopbackFeatures()
 
 // Overlay dimensions. Taller than before to fit the karaoke stack: 1 previous
 // line, the active line, and several upcoming lines.
@@ -222,6 +226,10 @@ app.whenReady().then(async () => {
     // palette extraction failed.
     playerStore.update({ color, palette: palette.length ? palette : color ? [color] : [] })
   })
+
+  // System audio for the visuals: auto-answer getDisplayMedia with the screen
+  // + loopback audio (audio/capture.js).
+  registerDisplayMediaHandler()
 
   // Fullscreen listening mode (windows/fullscreen.js).
   const fullscreen = createFullscreenController()
