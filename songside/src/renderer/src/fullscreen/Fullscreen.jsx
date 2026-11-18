@@ -3,6 +3,7 @@ import { usePlayer } from '../hooks/usePlayer'
 import { usePlaybackClock } from '../hooks/usePlaybackClock'
 import { closeFullscreen, runCommand } from '../bridge'
 import { useKeyboardControls } from '../input/keys'
+import { useGestures } from '../input/gestures'
 import { useIdleHide } from './useIdleHide'
 import { useActiveWord, useTimedDoc } from '../lyrics/useActiveWord'
 import FadedLyrics from '../lyrics/FadedLyrics'
@@ -51,6 +52,8 @@ export default function Fullscreen() {
 
   // Space / arrows / L / Esc (input/keys.js).
   useKeyboardControls({ onCommand: (cmd) => runCommand(cmd), onClose: closeFullscreen })
+  // Swipe ←/→ skip, swipe ↑/↓ volume, click pause, hold like (input/gestures.js).
+  useGestures((cmd) => runCommand(cmd))
 
   useEffect(() => {
     const onKey = (e) => {

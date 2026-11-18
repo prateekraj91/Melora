@@ -256,3 +256,39 @@ onClose})`, used by `Fullscreen.jsx` (replaces the old Esc-only handler).
 accessibility permission above) and whether Spotify ALSO reacts to the same
 press while fullscreen is open (if play/pause seems to do nothing, that's the
 double-toggle — tell me and I'll switch media keys off).
+
+---
+
+## 2.3 — Trackpad gestures
+
+**Built**
+
+- `input/gestures.js`: pure `createGestureClassifier()` (time-stamped
+  inputs → commands) + `useGestures(onCommand)` hook, used by `Fullscreen.jsx`.
+  - Wheel bursts form a gesture; it ends after 150ms of no wheel. ctrl+wheel
+    (pinch zoom) is ignored.
+  - Horizontal swipe: |ΣdX| > 120 and |ΣdX| > 2·|ΣdY| → `next` (positive dX =
+    fingers swipe left with natural scrolling) / `prev`. One per gesture,
+    400ms cooldown.
+  - Vertical: once the gesture is clearly vertical, `volumeDelta ±5`, at most
+    one per 120ms (positive dY = fingers up = louder).
+  - Click (down→up < 250ms, moved < 6px) → `toggle`. Hold ≥ 600ms without
+    moving → `like` (fires while still held; the release adds nothing).
+- 20 tests with synthetic event sequences: swipe vs scroll vs click vs hold,
+  thresholds, diagonal motion, momentum tails (continuous and split by a gap)
+  not double-skipping, pinch ignored, right-click ignored.
+
+**Decisions**
+
+- The 400ms cooldown counts from the **last** wheel event of the gesture
+  that skipped (not from the moment it skipped), so a long momentum tail
+  that briefly pauses still can't trigger a second skip.
+- A gesture locks to one axis: a swipe never changes volume and a vertical
+  scroll never skips.
+
+**Checked overnight:** tests; in the browser mock, synthetic DOM wheel /
+pointer events produced next, 4× volume +5, toggle and like.
+
+**Untested live:** a real trackpad. If skip or volume directions feel
+backwards (e.g. natural scrolling off), flip the sign checks in
+`gestures.js` (`sumX > 0 ? 'next' : 'prev'` / `pendingY > 0`).
