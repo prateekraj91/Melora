@@ -1,9 +1,13 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { usePlayer } from '../hooks/usePlayer'
 import { usePlaybackClock } from '../hooks/usePlaybackClock'
 import { closeFullscreen } from '../bridge'
 import { useIdleHide } from './useIdleHide'
 import { useActiveWord, useTimedDoc } from '../lyrics/useActiveWord'
+
+// The 700ms fade-in plays once per page load. The window is hidden/shown (not
+// reloaded) on reopen, and this flag also stops a remount from replaying it.
+let fadedIn = false
 
 function fmt(ms) {
   const s = Math.floor(ms / 1000)
@@ -24,6 +28,10 @@ export default function Fullscreen() {
   const { state, lyrics } = usePlayer()
   const now = usePlaybackClock(state)
   const idle = useIdleHide(3000)
+  const [fadeIn] = useState(() => !fadedIn)
+  useEffect(() => {
+    fadedIn = true
+  }, [])
   const posRef = useRef(/** @type {HTMLSpanElement|null} */ (null))
   const lineRef = useRef(/** @type {HTMLDivElement|null} */ (null))
   const timed = useTimedDoc(lyrics)
@@ -86,7 +94,7 @@ export default function Fullscreen() {
       className="flex h-screen w-screen items-center justify-center bg-black text-white"
       style={{ cursor: idle ? 'none' : 'auto' }}
     >
-      <div className="fullscreen-fade-in">
+      <div className={fadeIn ? 'fullscreen-fade-in' : undefined}>
         <div
           className="flex flex-col items-center gap-2 transition-opacity duration-[600ms] ease-out"
           style={{ opacity: idle ? 0 : 1 }}
