@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { usePlayer } from '../hooks/usePlayer'
 import { usePlaybackClock } from '../hooks/usePlaybackClock'
 import { closeFullscreen, runCommand } from '../bridge'
@@ -11,6 +11,9 @@ import DreamyBackground from '../visuals/background/DreamyBackground'
 import { useAudioFrame } from '../audio/useAudioFrame'
 import AudioDebug from '../audio/AudioDebug'
 import { stepPulse, glowOpacity } from '../audio/pulse'
+import { normalisePalette, rgbCss } from '../visuals/palette'
+import { useFeedback } from './useFeedback'
+import { HINT_TEXT, isPausedLook, bloomColour } from './feedback'
 
 const DEV = import.meta.env.DEV
 
@@ -50,10 +53,30 @@ export default function Fullscreen() {
     return () => cancelAnimationFrame(raf)
   }, [getAudio])
 
+  // Feedback without buttons (task 2.6): skip slide, volume label, like bloom,
+  // first-run hint. Every command goes through it on the way to the player.
+  const {
+    refs: {
+      lyrics: lyricsRef,
+      volumeLabel: volumeLabelRef,
+      volumeFlash: volumeFlashRef,
+      heart: heartRef,
+      hint: hintRef
+    },
+    onCommand: feedback
+  } = useFeedback({ lyricsDocId: lyrics?.trackId ?? null, volume: state?.volume })
+  const send = (cmd) => {
+    feedback(cmd)
+    runCommand(cmd)
+  }
   // Space / arrows / L / Esc (input/keys.js).
-  useKeyboardControls({ onCommand: (cmd) => runCommand(cmd), onClose: closeFullscreen })
+  useKeyboardControls({ onCommand: send, onClose: closeFullscreen })
   // Swipe ←/→ skip, swipe ↑/↓ volume, click pause, hold like (input/gestures.js).
-  useGestures((cmd) => runCommand(cmd))
+  useGestures(send)
+
+  const palette = state?.palette
+  const bloom = useMemo(() => rgbCss(bloomColour(normalisePalette(palette))), [palette])
+  const paused = isPausedLook(state?.status)
 
   useEffect(() => {
     const onKey = (e) => {
@@ -72,7 +95,14 @@ export default function Fullscreen() {
       className="relative h-screen w-screen overflow-hidden bg-black text-white"
       style={{ cursor: idle ? 'none' : 'auto' }}
     >
-      <div className={`absolute inset-0 ${fadeIn ? 'fullscreen-fade-in' : ''}`}>
+      <div
+        className={`absolute inset-0 ${fadeIn ? 'fullscreen-fade-in' : ''}`}
+        style={{
+          // Paused: the whole scene softly blurs and desaturates.
+          filter: paused ? 'blur(6px) saturate(0.7)' : 'blur(0px) saturate(1)',
+          transition: 'filter 500ms ease-out'
+        }}
+      >
         {/* background */}
         <DreamyBackground palette={state?.palette} energy={pulseEnergy} />
 
@@ -88,8 +118,21 @@ export default function Fullscreen() {
           }}
         />
 
-        {/* lyrics */}
-        <FadedLyrics doc={timed} getActive={getActive} />
+        {/* volume change: brief flash of the glow, palette-tinted */}
+        <div
+          ref={volumeFlashRef}
+          aria-hidden
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background: `radial-gradient(ellipse at 50% 50%, ${bloom} 0%, rgba(0,0,0,0) 65%)`,
+            opacity: 0
+          }}
+        />
+
+        {/* lyrics (slides sideways on skip) */}
+        <div ref={lyricsRef} className="pointer-events-none absolute inset-0">
+          <FadedLyrics doc={timed} getActive={getActive} />
+        </div>
 
         {/* chrome */}
         <div
@@ -99,6 +142,34 @@ export default function Fullscreen() {
           <div className="truncate text-[15px] font-medium">{track?.name ?? 'Nothing playing'}</div>
           <div className="truncate text-[13px] text-white/70">{track?.artist ?? ''}</div>
         </div>
+      </div>
+
+      {/* feedback layer (outside the blur) */}
+      <div
+        className="pointer-events-none absolute inset-x-0 top-[56%] text-center text-[13px] font-light tracking-[0.3em] text-white transition-opacity duration-500 ease-out"
+        style={{ opacity: paused ? 0.32 : 0 }}
+      >
+        paused
+      </div>
+      <div
+        ref={heartRef}
+        aria-hidden
+        className="pointer-events-none absolute top-1/2 left-1/2 text-[22vh] leading-none select-none"
+        style={{ color: bloom, opacity: 0, filter: 'blur(1px)', textShadow: `0 0 40px ${bloom}` }}
+      >
+        ♥
+      </div>
+      <div
+        ref={volumeLabelRef}
+        className="pointer-events-none absolute inset-x-0 bottom-[10vh] text-center text-[12px] font-light tracking-[0.2em] text-white"
+        style={{ opacity: 0 }}
+      />
+      <div
+        ref={hintRef}
+        className="pointer-events-none absolute inset-x-0 bottom-[3.5vh] text-center text-[12px] font-light tracking-[0.12em] text-white"
+        style={{ opacity: 0 }}
+      >
+        {HINT_TEXT}
       </div>
 
       {DEV && debug && <AudioDebug getFrame={getAudio} />}

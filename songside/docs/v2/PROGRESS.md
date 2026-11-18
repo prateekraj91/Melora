@@ -292,3 +292,59 @@ pointer events produced next, 4× volume +5, toggle and like.
 **Untested live:** a real trackpad. If skip or volume directions feel
 backwards (e.g. natural scrolling off), flip the sign checks in
 `gestures.js` (`sumX > 0 ? 'next' : 'prev'` / `pendingY > 0`).
+
+---
+
+## 2.6 — Feedback without buttons
+
+**Built**
+
+- `fullscreen/feedback.js` (pure, 12 tests): skip direction, a skip tracker
+  (slide-out → wait for the new lyrics doc → slide-in), volume label text,
+  "is this a real pause", the first-run flag (`takeFirstRun`, localStorage
+  in try/catch), the like-bloom colour (the palette's lightest entry, lifted
+  slightly towards white).
+- `fullscreen/useFeedback.js`: Web Animations on refs, never React state.
+  Every command from keys and gestures goes through `feedback(cmd)` and then
+  `runCommand(cmd)`.
+  - **Skip:** lyrics slide 8vw out in the swipe direction (next → left,
+    prev → right) and fade over 300ms, then the new lyrics slide in from the
+    other side. The slide-in starts when a lyrics doc with a different
+    trackId arrives (never before the slide-out finished), or after 1.5s if
+    none does (the skip failed or lyrics are slow) so the screen never stays
+    empty.
+  - **Volume:** on any change of `state.volume` (the first value after load
+    doesn't count), a palette-tinted centre flash (700ms, stronger at higher
+    volume) and a faint "vol 60" at the bottom centre that holds 800ms, then
+    fades over 400ms. The existing volume glow keeps easing to its new level.
+  - **Pause:** when `status === 'paused'` the whole scene gets `blur(6px)
+saturate(0.7)` (500ms transition) and a faint "paused" appears below
+    centre (outside the blur). It reverts on play.
+  - **Like:** a soft ♥ blooms in the centre (scale 0.6 → 1.35, peak opacity
+    0.55, 900ms), in the bloom colour.
+  - **Hints:** on the first ever fullscreen open (`songside.v2.hintsShown`
+    in localStorage) "swipe to skip · click to pause · ↑↓ volume · esc to
+    close" fades in at the bottom 0.8s after opening, holds, and is gone at
+    about 4.8s. Never again.
+
+**Decisions**
+
+- The like bloom fires as soon as the like is sent (optimistic), not after
+  the Web API confirms. If the library scope is missing it still blooms;
+  the failure is in the main log.
+- If localStorage throws, the hint is NOT shown (rather than nagging on
+  every open).
+- The hint decision is cached per page load, so React StrictMode's double
+  effects can't use it up before it plays.
+
+**Checked overnight:** tests; in the browser mock, sampled the computed
+styles: the skip slides out and back in (transform/opacity curve), "vol 70"
+appears at 0.4 opacity, the ♥ animates in a palette colour, the pause filter
+goes blur(6px) saturate(0.7) and back, and the hint plays once (opacity curve
+0 → 0.35 → 0 over ~4s) then stays off after the flag is set.
+
+**Untested live:** how it feels on a real display, and the real-Spotify
+round trip timing for the slide-in (it waits for the new lyrics doc; slow
+LRCLIB lookups fall back at 1.5s). To see the hint again, run
+`localStorage.removeItem('songside.v2.hintsShown')` in the fullscreen
+window's devtools.
