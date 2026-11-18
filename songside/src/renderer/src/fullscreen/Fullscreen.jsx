@@ -5,6 +5,9 @@ import { closeFullscreen } from '../bridge'
 import { useIdleHide } from './useIdleHide'
 import { useActiveWord, useTimedDoc } from '../lyrics/useActiveWord'
 import FadedLyrics from '../lyrics/FadedLyrics'
+import DreamyBackground from '../visuals/background/DreamyBackground'
+
+const zeroEnergy = () => 0
 
 // The 700ms fade-in plays once per page load. The window is hidden/shown (not
 // reloaded) on reopen, and this flag also stops a remount from replaying it.
@@ -41,6 +44,9 @@ export default function Fullscreen() {
       style={{ cursor: idle ? 'none' : 'auto' }}
     >
       <div className={`absolute inset-0 ${fadeIn ? 'fullscreen-fade-in' : ''}`}>
+        {/* background */}
+        <DreamyBackground palette={state?.palette} energy={zeroEnergy} />
+
         {/* lyrics */}
         <FadedLyrics doc={timed} getActive={getActive} />
 

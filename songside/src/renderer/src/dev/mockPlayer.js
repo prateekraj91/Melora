@@ -25,13 +25,7 @@ const LINE_MS = 4500
 const START_MS = 3000
 const DURATION = START_MS + LINES.length * LINE_MS + 3000
 
-export const MOCK_PALETTE = [
-  'oklch(0.84 0.07 20)',
-  'oklch(0.82 0.08 300)',
-  'oklch(0.86 0.06 220)',
-  'oklch(0.80 0.09 160)',
-  'oklch(0.87 0.05 80)'
-]
+export const MOCK_PALETTE = ['#f1b9b4', '#d3bdf0', '#a9d3ec', '#a6d8b8', '#eed2a8']
 
 const t0 = Date.now()
 

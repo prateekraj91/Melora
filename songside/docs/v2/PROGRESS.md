@@ -59,3 +59,47 @@ line. Anything that needs Electron, Spotify or system audio is marked
 only in the browser mock).
 
 **Check by hand:** see the morning checklist at the end.
+
+---
+
+## 1.4 — Dreamy background
+
+**Built**
+
+- Main: `main/palette.js` (pure): sRGB ⇄ OKLCH (Ottosson's OKLab), pastelise
+  (L clamped 0.78–0.88, chroma ≤ 0.09, hue kept, then chroma reduced further
+  only if needed to stay inside sRGB), `pastelPalette()` → exactly 5
+  `#rrggbb`. Tested in `main/__tests__/palette.test.js` (reference values
+  for sRGB red/green/blue, round trips, gamut mapping, clamps).
+- `main/color.js`: new `getAlbumPalette(url)` (colorthief `getPalette`,
+  colorCount 5), sharing one cached download per art URL with the v1
+  `getAlbumColor`. Caches are now capped at 64 entries.
+- `main/index.js`: the existing store subscriber now writes
+  `palette` (5 pastels) **and** keeps `color`; if palette extraction fails it
+  falls back to `[color]`.
+- `visuals/background/DreamyBackground.jsx` + `shader.js`: WebGL1 fullscreen
+  triangle, 5 gaussian blobs (one per colour) drifting on slow orbits, value-
+  noise warping, vignette, per-frame dither. `energy()` grows blob radius
+  (+25%) and brightness. Palette changes crossfade over 2s (smoothstep, on
+  the CPU, uploaded as uniforms). DPR ≤ 1.5, ResizeObserver, stops its rAF
+  while the document is hidden, handles `webglcontextlost`/`restored`, CSS
+  radial-gradient fallback if WebGL can't start.
+- `visuals/palette.js` (pure, tested): parse `#hex` / `rgb()` / `hsl()` (the v1
+  colour format, used by the fallback), normalise to 5, crossfade helpers.
+- Layered behind the lyrics in `Fullscreen.jsx` with `energy={() => 0}`.
+
+**Decisions**
+
+- Palette is stored as `#rrggbb` (not `oklch()` strings) so CSS, Canvas2D and
+  WebGL can all use it without a colour-space parser.
+- The blobs are drawn at ~30% brightness over a near-black base derived from
+  the palette, because pastels at full brightness would make the white lyrics
+  unreadable. If it looks too dark in the morning, raise `brightness` in
+  `shader.js` (one number).
+
+**Checked overnight:** in the browser mock (tinted soft field, lyrics
+readable), WebGL context loss → restore via `WEBGL_lose_context` (renders
+again), and `getPalette` on a Node Buffer with a generated test image.
+
+**Untested live:** real album art → palette in Electron, the 2s crossfade on a
+real track change, the CSS fallback path.

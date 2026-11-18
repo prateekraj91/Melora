@@ -1,7 +1,7 @@
 import 'dotenv/config'
 import { app, shell, BrowserWindow, ipcMain, screen, globalShortcut, components } from 'electron'
 import { loginSpotify, getCurrentlyPlaying, seekTo, isConnected } from './spotify.js'
-import { getAlbumColor } from './color.js'
+import { getAlbumColor, getAlbumPalette } from './color.js'
 import { getLyricMeaning, getMood, getWeeklyDigest, ensureOllama } from './llm.js'
 import { startLyricsSync, applySeek, onPlaybackState } from './lyrics.js'
 import { createTray } from './tray.js'
@@ -215,9 +215,12 @@ app.whenReady().then(async () => {
       playerStore.update({ color: null, palette: [] })
       return
     }
-    const color = await getAlbumColor(art)
+    const [color, palette] = await Promise.all([getAlbumColor(art), getAlbumPalette(art)])
     if ((playerStore.getState().track?.art ?? null) !== art) return
-    playerStore.update({ color, palette: color ? [color] : [] })
+    // palette: 5 OKLCH-pastelised #rrggbb colours (v2 visuals); color: the v1
+    // dominant colour, kept for compatibility. Fall back to [color] if the
+    // palette extraction failed.
+    playerStore.update({ color, palette: palette.length ? palette : color ? [color] : [] })
   })
 
   // Fullscreen listening mode (windows/fullscreen.js).
