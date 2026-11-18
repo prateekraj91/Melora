@@ -20,6 +20,103 @@ line. Anything that needs Electron, Spotify or system audio is marked
 
 ---
 
+## ☀️ Morning checklist (test by hand, in this order)
+
+Overnight result: 1.6, 1.4, 1.7, 1.8, 2.2a, 2.2, 2.3, 2.6 and 3.3 are
+committed on `v2`, one commit each, nothing pushed. Build, eslint (only the 3
+old v1 warnings) and `npm test` (193 tests) pass at every commit. Nothing
+below has been seen on a real display, with real Spotify, or with real audio.
+The installed `/Applications/songside.app` is still the old build — test with
+`npm run dev`.
+
+**0. Start**
+
+```bash
+cd songside && npm run dev
+```
+
+Play something in the Spotify app (a song with synced lyrics, e.g. a big
+English pop track).
+
+**1. One-time permissions / consent (needed for steps 5, 7, 9)**
+
+1. Menu-bar tray → **Reconnect Spotify** and accept. The new
+   `user-library-*` scopes are needed for _like_.
+2. Press **⌥Space** to open fullscreen. macOS should ask for **Screen &
+   System Audio Recording** for Electron. Allow it, then press **Esc** and
+   **⌥Space** again (or restart `npm run dev`). In the terminal look for
+   `[audio] running (48000 Hz)`.
+3. Media keys only: System Settings → Privacy & Security → **Accessibility**
+   → add Electron (dev). Without it, everything except the hardware media
+   keys still works.
+
+**2. Hint + look (1.4, 1.6, 2.6)** — open with **⌥Space** (first open ever).
+
+- The bottom shows "swipe to skip · click to pause · ↑↓ volume · esc to
+  close" faintly for about 4s. Close and reopen: it must **not** come back.
+- Background: soft pastel blobs in the album's colours, slowly drifting.
+  Skip to a different album later: the colours crossfade over ~2s.
+- Effects: slow floating bokeh orbs (scene `chill`).
+- Lyrics: the active line is centred and fills word by word; neighbours are
+  faint and blurred; the line change glides over ~0.5s.
+
+**3. Idle (1.3 / 1.5b):** don't touch anything for 3s. The cursor hides and
+the bottom-left track name fades; the lyrics stay. Move the mouse: it comes
+back.
+
+**4. Audio pulse (1.7 / 1.8):** with music playing, the background should
+gently brighten and grow on the bass/beats. Press **D**: the audio debug
+overlay shows moving bars, a beat flash and a bpm. **D** again hides it. If
+the bars are flat, read the `[audio]` terminal lines.
+
+**5. Keyboard (2.2a / 2.2 / 2.6)**
+
+| Key   | Expect                                                                                                  |
+| ----- | ------------------------------------------------------------------------------------------------------- |
+| Space | pause → whole screen blurs + desaturates, faint "paused" below centre; Space again → sharp, plays       |
+| →     | next track; lyrics slide out **left**, new lyrics slide in from the right                               |
+| ←     | previous; lyrics slide out **right**, in from the left                                                  |
+| ↑ / ↓ | volume ±10 (hold to repeat); faint "vol 70" bottom-centre for ~0.8s, a soft palette-coloured glow flash |
+| L     | like: a soft ♥ blooms in the centre (~0.9s); the song appears in Liked Songs in Spotify                 |
+| Esc   | closes fullscreen                                                                                       |
+
+**6. Trackpad (2.3)** — two fingers on the trackpad:
+
+- Swipe **left** → next (exactly one skip, even with a hard fling). Swipe
+  **right** → previous.
+- Slide two fingers **up** → volume up in +5 steps; **down** → down.
+- **Click** anywhere → play/pause. **Press and hold ~0.6s** → like (♥).
+- If skip or volume feel backwards, flip the signs in
+  `src/renderer/src/input/gestures.js` (`sumX > 0 ? 'next' : 'prev'` and
+  `pendingY > 0`). That's the one guess I couldn't check without a trackpad.
+
+**7. Media keys (2.2):** with fullscreen open, F7 / F8 / F9 →
+prev / play-pause / next exactly once (not toggled twice by Spotify too).
+After **Esc**, the media keys go back to Spotify.
+
+**8. Effect scenes (3.3)** — dev builds only: press **S** to cycle
+`chill → christmas → rock → rain → love → edm → hiphop`. The name shows
+faintly top-right for 1s, and scenes crossfade over 1.5s. Things to judge:
+
+- Does anything feel harsh? Everything should be soft and translucent.
+- Do rock beams sweep and the screen shake a tiny bit on kicks, and do edm
+  rings pulse on the beat with real audio?
+- Is the hiphop smoke visible enough?
+- Performance: does anything stutter at full resolution? The FPS readout
+  isn't built; just watch the lyrics fill.
+
+**9. Volume glow (1.8):** at a higher Spotify volume, the centre of the
+screen is slightly brighter.
+
+**Known gaps:**
+
+- `sleep` returns false (not built).
+- Scene choice is the dev cycler only (AI = task 3.2). Release builds always
+  show `chill`.
+- Intensity is fixed at 0.6.
+
+---
+
 ## 1.6 — Faded lyrics
 
 **Built**
