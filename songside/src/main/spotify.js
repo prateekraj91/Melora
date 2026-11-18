@@ -5,8 +5,16 @@ import { getSpotifyTokens, saveSpotifyTokens } from './store.js'
 const REDIRECT_URI = 'http://127.0.0.1:8888/callback'
 const CLIENT_ID = process.env.SPOTIFY_CLIENT_ID
 // user-modify-playback-state is required for the click-to-seek feature
-// (PUT /me/player/seek); the read scopes cover currently-playing + position.
-const SCOPES = 'user-read-playback-state user-read-currently-playing user-modify-playback-state'
+// (PUT /me/player/seek) and the v2 player commands; the read scopes cover
+// currently-playing + position. v2 adds the library scopes for "like"
+// (PUT /me/tracks) — existing users must reconnect once (tray → Reconnect).
+const SCOPES = [
+  'user-read-playback-state',
+  'user-read-currently-playing',
+  'user-modify-playback-state',
+  'user-library-modify',
+  'user-library-read'
+].join(' ')
 
 function generateRandomString(length) {
   return crypto.randomBytes(60).toString('hex').substring(0, length)

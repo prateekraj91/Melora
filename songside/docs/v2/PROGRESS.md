@@ -181,3 +181,42 @@ background's mean brightness pulses ≈ 45 → 50 (of 255) twice a second.
 **Untested live:** with real audio; the glow responding to a real volume
 change (Spotify's currently-playing endpoint only sometimes includes the
 device volume — see 2.2a for the command path that sets it).
+
+---
+
+## 2.2a — Command executor (Web API)
+
+**Built**
+
+- `main/spotify/commands.js`: `commandToRequest(cmd, state)` (pure),
+  `optimisticPatch(cmd, state)` (pure) and `createCommandRunner(deps)` →
+  `runCommand(cmd)`, behind `INVOKE.PLAYER_COMMAND` (wired in
+  `main/index.js`). Supports play, pause, toggle, next, prev, seek, volume,
+  volumeDelta, playUri (track → `uris`, album/playlist/artist →
+  `context_uri`), queue, like (`PUT /me/tracks?ids=`).
+- Errors: 401 → refresh token and retry once; 403 (logs Spotify's reason,
+  e.g. `PREMIUM_REQUIRED`, `VOLUME_CONTROL_DISALLOW`) and 404 (no active
+  device) → `false` + log; network errors → `false`. Never throws.
+- After success: the store gets an optimistic patch at once (play state +
+  re-anchored position, volume, seek), then `pollNow()` (new export in
+  `main/lyrics.js`) re-reads Spotify immediately and again after 700ms.
+- Scopes: added `user-library-modify` and `user-library-read`.
+- `bridge.js`: `runCommand(cmd)` (resolves `false` without Electron). In the
+  dev `?mock` mode commands drive the mock player (two mock tracks), so input
+  and feedback can be exercised in a browser.
+- 32 tests in `main/__tests__/commands.test.js` (mapping table, clamps,
+  optimistic patches, 401 retry, 403/404/500/network, not connected).
+
+**Decisions**
+
+- `sleep` is accepted by the type but returns `false` and logs "not
+  implemented" — the sleep timer is a later task.
+- The extra 700ms re-poll is because Spotify's currently-playing lags a
+  `next` by a few hundred ms.
+
+**ACTION NEEDED (once):** the new library scopes need fresh consent —
+**menu-bar tray → Reconnect Spotify** before testing "like". Until then like
+returns 403 (logged as `forbidden (403 …)`), everything else works.
+
+**Untested live:** every command against the real Spotify app. Volume via
+the Web API may be refused for some devices (403 `VOLUME_CONTROL_DISALLOW`).

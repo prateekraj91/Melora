@@ -202,6 +202,12 @@ export function stopLyricsSync() {
   }
 }
 
+// v2: re-read Spotify right now (after a player command) instead of waiting
+// for the next 3s poll, so the store — and every window — updates quickly.
+export function pollNow() {
+  engine?.poll()
+}
+
 // Called right after a user-initiated seek: move the interpolation anchor to the
 // new position and re-run the tick so the active line jumps to the clicked line
 // immediately, rather than lagging until the next 3s Spotify poll.

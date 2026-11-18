@@ -1,9 +1,17 @@
 import 'dotenv/config'
 import { app, shell, BrowserWindow, ipcMain, screen, globalShortcut, components } from 'electron'
-import { loginSpotify, getCurrentlyPlaying, seekTo, isConnected } from './spotify.js'
+import {
+  loginSpotify,
+  getCurrentlyPlaying,
+  seekTo,
+  isConnected,
+  getValidAccessToken,
+  refreshAccessToken
+} from './spotify.js'
+import { createCommandRunner } from './spotify/commands.js'
 import { getAlbumColor, getAlbumPalette } from './color.js'
 import { getLyricMeaning, getMood, getWeeklyDigest, ensureOllama } from './llm.js'
-import { startLyricsSync, applySeek, onPlaybackState } from './lyrics.js'
+import { startLyricsSync, applySeek, onPlaybackState, pollNow } from './lyrics.js'
 import { createTray } from './tray.js'
 import store, { clearSpotifyTokens } from './store.js'
 import * as playerStore from './state/playerStore.js'
@@ -226,6 +234,17 @@ app.whenReady().then(async () => {
     // palette extraction failed.
     playerStore.update({ color, palette: palette.length ? palette : color ? [color] : [] })
   })
+
+  // Player commands over the Spotify Web API (spotify/commands.js).
+  const runCommand = createCommandRunner({
+    fetch: (...a) => fetch(...a),
+    getToken: getValidAccessToken,
+    refreshToken: refreshAccessToken,
+    getState: playerStore.getState,
+    updateState: playerStore.update,
+    pollNow
+  })
+  ipcMain.handle(INVOKE.PLAYER_COMMAND, (_event, cmd) => runCommand(cmd))
 
   // System audio for the visuals: auto-answer getDisplayMedia with the screen
   // + loopback audio (audio/capture.js).

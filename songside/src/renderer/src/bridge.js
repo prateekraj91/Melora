@@ -9,7 +9,14 @@
 // directly; don't add new callers of window.api — go through here.
 
 import { INVOKE, SEND, PUSH } from '../../shared/ipc.js'
-import { isMock, mockState, mockLyrics } from './dev/mockPlayer.js'
+import {
+  isMock,
+  mockState,
+  mockLyrics,
+  mockCommand,
+  onMockState,
+  onMockLyrics
+} from './dev/mockPlayer.js'
 
 export { INVOKE, SEND, PUSH }
 
@@ -43,6 +50,7 @@ export function getLyricsDoc() {
  * @returns {() => void} unsubscribe
  */
 export function onPlayerState(cb) {
+  if (mock) return onMockState(cb)
   return api?.onPlayerState ? api.onPlayerState(cb) : noop
 }
 
@@ -51,7 +59,18 @@ export function onPlayerState(cb) {
  * @returns {() => void} unsubscribe
  */
 export function onLyricsDoc(cb) {
+  if (mock) return onMockLyrics(cb)
   return api?.onLyricsDoc ? api.onLyricsDoc(cb) : noop
+}
+
+/**
+ * Run a player command in main (spotify/commands.js).
+ * @param {import('../../shared/types.js').PlayerCommand} cmd
+ * @returns {Promise<boolean>} false when it failed or there is no bridge
+ */
+export function runCommand(cmd) {
+  if (mock) return Promise.resolve(mockCommand(cmd))
+  return api?.invoke ? api.invoke(INVOKE.PLAYER_COMMAND, cmd) : Promise.resolve(false)
 }
 
 export function toggleFullscreen() {
