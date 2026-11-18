@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { usePlayer } from '../hooks/usePlayer'
 import { usePlaybackClock } from '../hooks/usePlaybackClock'
 import { closeFullscreen } from '../bridge'
@@ -8,10 +8,9 @@ import FadedLyrics from '../lyrics/FadedLyrics'
 import DreamyBackground from '../visuals/background/DreamyBackground'
 import { useAudioFrame } from '../audio/useAudioFrame'
 import AudioDebug from '../audio/AudioDebug'
+import { stepPulse, glowOpacity } from '../audio/pulse'
 
 const DEV = import.meta.env.DEV
-
-const zeroEnergy = () => 0
 
 // The 700ms fade-in plays once per page load. The window is hidden/shown (not
 // reloaded) on reopen, and this flag also stops a remount from replaying it.
@@ -35,6 +34,20 @@ export default function Fullscreen() {
   const getAudio = useAudioFrame()
   const [debug, setDebug] = useState(false)
 
+  // Pulse (task 1.8): one rAF loop smooths bass/energy/beats into a 0–1 value
+  // that drives the background. Kept in a ref — never React state.
+  const pulse = useRef(0)
+  const [pulseEnergy] = useState(() => () => pulse.current)
+  useEffect(() => {
+    let raf = 0
+    const loop = () => {
+      pulse.current = stepPulse(pulse.current, getAudio())
+      raf = requestAnimationFrame(loop)
+    }
+    raf = requestAnimationFrame(loop)
+    return () => cancelAnimationFrame(raf)
+  }, [getAudio])
+
   useEffect(() => {
     const onKey = (e) => {
       if (e.key === 'Escape') closeFullscreen()
@@ -55,7 +68,19 @@ export default function Fullscreen() {
     >
       <div className={`absolute inset-0 ${fadeIn ? 'fullscreen-fade-in' : ''}`}>
         {/* background */}
-        <DreamyBackground palette={state?.palette} energy={zeroEnergy} />
+        <DreamyBackground palette={state?.palette} energy={pulseEnergy} />
+
+        {/* volume glow: brighter centre at higher volume */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background:
+              'radial-gradient(ellipse at 50% 50%, rgba(255,255,255,1) 0%, rgba(255,255,255,0) 60%)',
+            opacity: glowOpacity(state?.volume),
+            transition: 'opacity 400ms ease-out'
+          }}
+        />
 
         {/* lyrics */}
         <FadedLyrics doc={timed} getActive={getActive} />

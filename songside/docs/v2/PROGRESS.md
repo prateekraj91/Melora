@@ -156,3 +156,28 @@ open macOS should ask for **Screen & System Audio Recording** permission for
 Electron (dev) / songside (packaged). Grant it, then you may have to close and
 reopen fullscreen (or restart the app). Check the terminal for `[audio]` lines
 (`running (48000 Hz)` = good; `capture failed …` = tell me the message).
+
+---
+
+## 1.8 — Pulse + volume glow
+
+**Built**
+
+- `audio/pulse.js` (pure, tested): `stepPulse` — target = 0.35·bass +
+  0.15·energy; a beat adds +0.25 (cap 1); every frame pulse += (target −
+  pulse)·0.12. `glowOpacity(volume)` = 0.02 + volume/100·0.06.
+- `Fullscreen.jsx`: one rAF loop updates `pulse.current` (a ref) from
+  `useAudioFrame()`; the background gets `energy={() => pulse.current}`
+  (a stable function).
+- A fixed radial white glow layer between the background and the lyrics;
+  opacity from `state.volume` with a 400ms transition.
+
+**Decisions:** unknown volume (`null`, e.g. before the first poll or when
+Spotify doesn't report a device) is treated as 50.
+
+**Checked overnight:** in the browser mock with synthetic 120 bpm audio the
+background's mean brightness pulses ≈ 45 → 50 (of 255) twice a second.
+
+**Untested live:** with real audio; the glow responding to a real volume
+change (Spotify's currently-playing endpoint only sometimes includes the
+device volume — see 2.2a for the command path that sets it).
